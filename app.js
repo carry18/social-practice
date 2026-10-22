@@ -158,30 +158,49 @@ async function liveSegment(from, to) {
 }
 
 async function prefetchLive(valid, onProgress) {
-  // 对票价库缺失的分段逐个实时查询，结果写入 FARES（内存，本次会话有效）
+  // 实时优先：链上所有分段都调云函数查最新价（3路并发）；失败的分段回落票价库快照（无快照才标失败）
   const segs = FARES.segments, meta = FARES.meta || (FARES.meta = {});
-  const failed = [];
+  const liveWanted = (typeof document === "undefined") ? true
+    : (document.getElementById("live-first") && document.getElementById("live-first").checked);
+  const tasks = [], seen = new Set();
   for (const t of valid) {
     const toks = cityTokens(t.B, knownCities(FARES));
     if (!toks.length) continue;
     const chain = ["北京", ...toks, "北京"];
     for (let i = 0; i < chain.length - 1; i++) {
       const key = `${chain[i]}-${chain[i + 1]}`, rev = `${chain[i + 1]}-${chain[i]}`;
-      if (segs[key] !== undefined || segs[rev] !== undefined) continue;
-      if (meta[key] && meta[key].live_failed) continue;
-      onProgress && onProgress(`⏳ 正在实时查询 ${key} 票价（约10~30秒）…`);
-      try {
-        const r = await liveSegment(chain[i], chain[i + 1]);
-        segs[key] = r.price;
-        meta[key] = { train: r.train, query_date: r.query_date, window: r.window,
-                      days_queried: r.days_queried, live: true };
-      } catch (e) {
+      if (seen.has(key) || seen.has(rev)) continue;
+      seen.add(key);
+      if (meta[key] && meta[key].live) continue;          // 本次会话已实时查过
+      if (meta[key] && meta[key].live_failed) continue;   // 实时查过且失败
+      const hasSnap = segs[key] !== undefined || segs[rev] !== undefined;
+      if (!liveWanted && hasSnap) continue;               // 快照模式：只补库外分段
+      tasks.push([chain[i], chain[i + 1], key, hasSnap]);
+    }
+  }
+  const failed = [], fellBack = [];
+  let done = 0;
+  const runOne = async ([a, b, key, hasSnap]) => {
+    onProgress && onProgress(`⏳ 实时查询票价（${++done}/${tasks.length}）${key}…`);
+    try {
+      const r = await liveSegment(a, b);
+      segs[key] = r.price;
+      meta[key] = { train: r.train, query_date: r.query_date, window: r.window,
+                    days_queried: r.days_queried, live: true };
+    } catch (e) {
+      if (hasSnap) fellBack.push(key);                    // 静默回落快照
+      else {
         meta[key] = { live_failed: true, note: String((e && e.message) || e) };
         failed.push(key);
       }
     }
-  }
-  return failed;
+  };
+  const queue = [...tasks];
+  const workers = Array.from({ length: Math.min(3, queue.length) }, async () => {
+    while (queue.length) await runOne(queue.shift());
+  });
+  await Promise.all(workers);
+  return { failed, fellBack };
 }
 
 /* ---------- xlsx 生成（复刻模板布局，公式+缓存值双写） ---------- */
@@ -506,9 +525,9 @@ if (typeof document !== "undefined") {
     const btn = $("preview-btn");
     btn.disabled = true;
     const setStatus = msg => { $("fare-info").textContent = msg; };
-    let liveFailed = [];
+    let liveRes = { failed: [], fellBack: [] };
     try {
-      liveFailed = await prefetchLive(valid, setStatus);
+      liveRes = await prefetchLive(valid, setStatus);
     } finally {
       btn.disabled = false;
       const n = Object.keys(FARES.segments || {}).length;
@@ -524,8 +543,10 @@ if (typeof document !== "undefined") {
       if (t.fare.status === "往返总价" || t.fare.status === "多城总价")
         warns.push(`「${t.B}」使用${t.fare.status}（非实时分段价）`);
     });
-    if (liveFailed.length)
-      warns.push(`以下分段实时查询失败或无直达车：${liveFailed.join("、")}——请手填"单人交通费"，或联系实践部用 --set 人工录入`);
+    if (liveRes.failed.length)
+      warns.push(`以下分段实时查询失败或无直达车：${liveRes.failed.join("、")}——请手填"单人交通费"，或联系实践部用 --set 人工录入`);
+    if (liveRes.fellBack.length)
+      warns.push(`以下分段实时查询未成功，已使用票价库快照价（每周一自动刷新，影响极小）：${liveRes.fellBack.join("、")}`);
     showWarn(warns);
     showPreview(computed);
     lastComputed = computed;
