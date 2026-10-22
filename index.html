@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>实践支队预算表生成器 · 清华就协实践部</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  :root { --purple: #6f2d91; --purple-light: #f3eaf8; --gray: #666; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+         margin: 0; background: #fafafa; color: #222; }
+  header { background: var(--purple); color: #fff; padding: 18px 28px; }
+  header h1 { margin: 0; font-size: 20px; }
+  header p { margin: 6px 0 0; font-size: 13px; opacity: .85; }
+  main { max-width: 1080px; margin: 24px auto; padding: 0 16px; }
+  .card { background: #fff; border: 1px solid #e5e5e5; border-radius: 10px;
+          padding: 20px 24px; margin-bottom: 20px; }
+  .card h2 { margin: 0 0 12px; font-size: 16px; color: var(--purple); }
+  .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+  .tabs button { border: 1px solid var(--purple); background: #fff; color: var(--purple);
+                 padding: 6px 18px; border-radius: 6px; cursor: pointer; font-size: 14px; }
+  .tabs button.active { background: var(--purple); color: #fff; }
+  table.editor { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.editor th { background: var(--purple-light); padding: 8px 6px; border: 1px solid #e0d4ea; }
+  table.editor td { border: 1px solid #eee; padding: 4px; }
+  table.editor input { width: 100%; border: none; outline: none; font-size: 13px; padding: 4px; background: transparent; }
+  table.editor tr:hover td { background: #fbf7fd; }
+  .btn { background: var(--purple); color: #fff; border: none; padding: 10px 26px;
+         border-radius: 8px; font-size: 15px; cursor: pointer; }
+  .btn.secondary { background: #fff; color: var(--purple); border: 1px solid var(--purple); padding: 6px 14px; font-size: 13px; }
+  .btn:disabled { background: #bbb; cursor: not-allowed; }
+  input.bad { background: #fdecec !important; border-radius: 4px; }
+  input.good { background: #eef7ee !important; border-radius: 4px; }
+  .hint { font-size: 12px; color: var(--gray); line-height: 1.7; }
+  .warn { background: #fff8e6; border: 1px solid #ffe1a8; border-radius: 8px;
+          padding: 10px 14px; font-size: 13px; margin-top: 14px; display: none; white-space: pre-line; }
+  #preview { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 12px; }
+  #preview th, #preview td { border: 1px solid #e0e0e0; padding: 6px 8px; text-align: left; }
+  #preview th { background: var(--purple-light); }
+  #drop { border: 2px dashed #cbb3dd; border-radius: 10px; padding: 34px; text-align: center;
+          color: var(--gray); cursor: pointer; }
+  #drop.hover { background: var(--purple-light); }
+  footer { text-align: center; color: #999; font-size: 12px; padding: 24px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>实践支队预算表生成器</h1>
+  <p>清华大学学生就业服务协会 · 实践部 ｜ 填好支队信息 → 一键生成完整预算表（含 12306 二等座最高票价）→ 下载 Excel</p>
+</header>
+<main>
+  <div class="card">
+    <h2>第一步 · 录入支队信息</h2>
+    <div class="tabs">
+      <button id="tab-manual" class="active">手动填写</button>
+      <button id="tab-upload">上传院系申报表 (xlsx)</button>
+    </div>
+
+    <div id="panel-manual">
+      <table class="editor" id="editor">
+        <thead><tr>
+          <th style="width:36px">#</th><th style="width:15%">实践地点 *</th>
+          <th style="width:26%">拟主要参访点位</th><th style="width:12%">承办单位 *</th>
+          <th style="width:13%">拟参访日期 *</th><th style="width:8%">人数 *</th>
+          <th style="width:12%">院系已有支持</th><th style="width:40px"></th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+      <div style="margin-top:10px">
+        <button class="btn secondary" id="add-row">＋ 添加支队</button>
+      </div>
+      <p class="hint">
+        实践地点：按行程顺序写城市，如「合肥、上海」；承办单位：就协组织填「就协」（联合承办含"就协"即全额），院系联合填院系名（按 2/3 支持）；<br>
+        拟参访日期格式：7.19-7.23 或 7月19日-7月23日；点位/院系栏含「承担住宿」「住宿自理」字样时住宿费按 0 计。
+      </p>
+    </div>
+
+    <div id="panel-upload" style="display:none">
+      <div id="drop">点击选择或拖入院系申报表 xlsx<br>
+        <span class="hint">需含：实践地点 / 承办单位 / 拟参访日期 / 支队人数 列（按模板 A-H 列布局，数据自第 7 行起）</span>
+      </div>
+      <input type="file" id="file" accept=".xlsx,.xls" style="display:none">
+      <div id="upload-info" class="hint" style="margin-top:8px"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>第二步 · 生成预算表</h2>
+    <p class="hint" id="fare-info">票价库加载中…</p>
+    <button class="btn" id="generate">生成并下载预算表 xlsx</button>
+    <div class="warn" id="warn"></div>
+    <table id="preview" style="display:none"></table>
+  </div>
+</main>
+<footer>数据不出浏览器：所有计算与文件生成均在本地完成 ｜ 票价库由实践部每期预算前刷新</footer>
+<datalist id="city-list"></datalist>
+<script src="app.js"></script>
+</body>
+</html>
