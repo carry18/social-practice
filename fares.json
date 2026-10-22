@@ -112,13 +112,13 @@
       "query_date": "2026-10-23",
       "train": "G3937",
       "window": "2026-10-23~2026-11-05",
-      "days_queried": 14
+      "days_queried": 12
     },
     "合肥-上海": {
       "query_date": "2026-10-23",
-      "train": "G3248",
+      "train": "G9514",
       "window": "2026-10-23~2026-11-05",
-      "days_queried": 13
+      "days_queried": 14
     },
     "北京-福州": {
       "query_date": "2026-10-23",
@@ -227,13 +227,13 @@
       "query_date": "2026-10-23",
       "train": "G107",
       "window": "2026-10-23~2026-11-05",
-      "days_queried": 13
+      "days_queried": 14
     },
     "沈阳-北京": {
       "query_date": "2026-10-23",
       "train": "G178",
       "window": "2026-10-23~2026-11-05",
-      "days_queried": 14
+      "days_queried": 13
     },
     "北京-大连": {
       "query_date": "2026-10-23",
@@ -251,25 +251,25 @@
       "query_date": "2026-10-23",
       "train": "G7135",
       "window": "2026-10-23~2026-11-05",
-      "days_queried": 14
+      "days_queried": 13
     },
     "苏州-南京": {
       "query_date": "2026-10-23",
       "train": "C3019",
       "window": "2026-10-23~2026-11-05",
-      "days_queried": 13
+      "days_queried": 14
     },
     "广州-深圳": {
       "query_date": "2026-10-24",
       "train": "G6121",
       "window": "2026-10-23~2026-11-05",
-      "days_queried": 13
+      "days_queried": 11
     },
     "深圳-广州": {
-      "query_date": "2026-10-23",
+      "query_date": "2026-10-24",
       "train": "G6560",
       "window": "2026-10-23~2026-11-05",
-      "days_queried": 12
+      "days_queried": 10
     },
     "北京-林芝": {
       "manual": true,
@@ -286,7 +286,7 @@
       "query_date": "2026-10-23",
       "train": "G1094",
       "window": "2026-10-23~2026-11-05",
-      "days_queried": 13
+      "days_queried": 14
     },
     "济南-青岛": {
       "query_date": "2026-10-23",
@@ -298,7 +298,7 @@
       "query_date": "2026-10-23",
       "train": "G6902",
       "window": "2026-10-23~2026-11-05",
-      "days_queried": 13
+      "days_queried": 14
     },
     "北京-青岛": {
       "query_date": "2026-10-23",
