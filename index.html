@@ -94,8 +94,10 @@
       <label class="hint">公文标题 <input id="doc-title" value="2026年暑假“清华学子地域行”实践预算" style="width:300px;padding:4px 6px"></label>
       <label class="hint">季度表述 <input id="doc-season" value="2026年暑期" style="width:110px;padding:4px 6px"></label>
     </div>
-    <button class="btn" id="generate">下载预算表 xlsx</button>
-    <button class="btn" id="generate-docx" style="margin-left:10px">下载公文版 Word</button>
+    <button class="btn" id="preview-btn" disabled>生成预览</button>
+    <button class="btn" id="generate" disabled style="margin-left:10px">下载预算表 xlsx</button>
+    <button class="btn" id="generate-docx" disabled style="margin-left:10px">下载公文版 Word</button>
+    <span class="hint">（先点"生成预览"核对下方表格，确认无误后再下载）</span>
     <div class="warn" id="warn"></div>
     <table id="preview" style="display:none"></table>
   </div>

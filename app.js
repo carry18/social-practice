@@ -284,7 +284,7 @@ function buildDocx(computed, title, season) {
   const border = { style: BorderStyle.SINGLE, size: 2, color: "000000" };
   const borders = { top: border, bottom: border, left: border, right: border,
                     insideHorizontal: border, insideVertical: border };
-  const widths = [1.2, 4.5, 1.3, 3.0, 1.8, 3.6, 1.8, 2.4, 1.6, 1.8, 3.2]; // cm
+  const widths = [0.9, 3.0, 0.9, 2.2, 1.3, 2.5, 1.3, 1.8, 1.2, 1.3, 1.6]; // cm，合计18cm适配竖版版心
 
   const teams = computed.map(t => ({ ...t, ...docxDescs(t) }));
   const total = teams.reduce((a, t) => a + t.AB, 0);
@@ -334,7 +334,7 @@ function buildDocx(computed, title, season) {
   return new Document({
     sections: [{
       properties: { page: {
-        size: { width: CM(29.7), height: CM(21) },   // 宽>高即横版（docx.js 的 orientation 会交换宽高，勿用）
+        size: { width: CM(21), height: CM(29.7) },   // A4 竖版
         margin: { left: CM(1.5), right: CM(1.5), top: CM(1.5), bottom: CM(1.5) },
       } },
       children: [
@@ -366,6 +366,15 @@ if (typeof module !== "undefined") {
 if (typeof document !== "undefined") {
   const $ = id => document.getElementById(id);
   let teams = [];
+  let lastComputed = null;   // 预览通过后才允许下载；任何编辑都会使其失效
+
+  function invalidate() {
+    lastComputed = null;
+    $("generate").disabled = true;
+    $("generate-docx").disabled = true;
+    $("preview").style.display = "none";
+    $("warn").style.display = "none";
+  }
 
   function saveLocal() { try { localStorage.setItem("budgetTeams", JSON.stringify(teams)); } catch (e) {} }
   function loadLocal() {
@@ -401,11 +410,12 @@ if (typeof document !== "undefined") {
         e.target.title = (v && !hit) ? "票价库未收录该地点：可照常在右侧「单人交通费」列手填票价" : "";
       }
       saveLocal();
+      invalidate();
     }));
     tb.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", e => {
       teams.splice(+e.target.dataset.del, 1);
       if (!teams.length) teams = [{ B: "", C: "", D: "就协", E: "", F: 12, H: "" }];
-      renderEditor(); saveLocal();
+      renderEditor(); saveLocal(); invalidate();
     }));
   }
 
@@ -445,12 +455,15 @@ if (typeof document !== "undefined") {
     });
     showWarn(warns);
     showPreview(computed);
+    lastComputed = computed;
+    $("generate").disabled = false;
+    $("generate-docx").disabled = false;
     return computed;
   }
 
   function generate(fmt) {
-    const computed = computeAll();
-    if (!computed) return;
+    const computed = lastComputed;
+    if (!computed) { alert("请先点击「生成预览」核对数据"); return; }
     const d = new Date(), pad = n => String(n).padStart(2, "0");
     const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`;
     if (fmt === "xlsx") {
@@ -481,7 +494,7 @@ if (typeof document !== "undefined") {
     }
     if (!found.length) { $("upload-info").textContent = "未识别到支队行（需 B 列实践地点 + F 列人数为数字）"; return; }
     teams = found;
-    saveLocal(); renderEditor();
+    saveLocal(); renderEditor(); invalidate();
     $("upload-info").textContent = `已导入 ${found.length} 支支队（表：${name}），可切换到「手动填写」查看修改`;
     $("tab-manual").click();
   }
@@ -498,8 +511,9 @@ if (typeof document !== "undefined") {
     });
     $("add-row").addEventListener("click", () => {
       teams.push({ B: "", C: "", D: "就协", E: "", F: 12, H: "" });
-      renderEditor(); saveLocal();
+      renderEditor(); saveLocal(); invalidate();
     });
+    $("preview-btn").addEventListener("click", computeAll);
     $("generate").addEventListener("click", () => generate("xlsx"));
     $("generate-docx").addEventListener("click", () => generate("docx"));
     $("drop").addEventListener("click", () => $("file").click());
@@ -517,12 +531,12 @@ if (typeof document !== "undefined") {
       const n = Object.keys(FARES.segments || {}).length;
       const updated = (FARES.meta && FARES.meta.updated_at) || "未知";
       $("fare-info").textContent = `票价库：${n} 个分段 · 更新于 ${updated} · 取 12306 预售期 14 天窗口二等座最高价`;
-      $("generate").disabled = false;
+      $("preview-btn").disabled = false;
       // 地点自动联想候选（票价库全部城市）
       $("city-list").innerHTML = knownCities(FARES).map(c => `<option value="${c}">`).join("");
     } catch (e) {
       $("fare-info").textContent = "⚠ fares.json 加载失败（请通过 http(s) 访问本页，file:// 直开无法读取票价库）";
-      $("generate").disabled = true;
+      $("preview-btn").disabled = true;
     }
   });
 }
