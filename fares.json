@@ -78,7 +78,7 @@
       "query_date": "2026-10-23",
       "train": "G339",
       "window": "2026-10-23~2026-11-05",
-      "days_queried": 13
+      "days_queried": 14
     },
     "武汉-北京": {
       "query_date": "2026-10-23",
@@ -96,7 +96,7 @@
       "query_date": "2026-10-23",
       "train": "G970",
       "window": "2026-10-23~2026-11-05",
-      "days_queried": 13
+      "days_queried": 14
     },
     "北京-合肥": {
       "query_date": "2026-10-23",
@@ -108,7 +108,7 @@
       "query_date": "2026-10-23",
       "train": "G3248",
       "window": "2026-10-23~2026-11-05",
-      "days_queried": 14
+      "days_queried": 13
     },
     "北京-福州": {
       "query_date": "2026-10-23",
@@ -133,7 +133,7 @@
       "query_date": "2026-10-23",
       "train": "G800",
       "window": "2026-10-23~2026-11-05",
-      "days_queried": 13
+      "days_queried": 14
     },
     "北京-上海": {
       "query_date": "2026-10-23",
@@ -217,7 +217,7 @@
       "query_date": "2026-10-23",
       "train": "G107",
       "window": "2026-10-23~2026-11-05",
-      "days_queried": 14
+      "days_queried": 13
     },
     "沈阳-北京": {
       "query_date": "2026-10-23",
@@ -241,7 +241,7 @@
       "query_date": "2026-10-23",
       "train": "G7135",
       "window": "2026-10-23~2026-11-05",
-      "days_queried": 12
+      "days_queried": 14
     },
     "苏州-南京": {
       "query_date": "2026-10-23",
@@ -253,13 +253,13 @@
       "query_date": "2026-10-24",
       "train": "G6121",
       "window": "2026-10-23~2026-11-05",
-      "days_queried": 10
+      "days_queried": 13
     },
     "深圳-广州": {
-      "query_date": "2026-10-24",
+      "query_date": "2026-10-23",
       "train": "G6560",
       "window": "2026-10-23~2026-11-05",
-      "days_queried": 11
+      "days_queried": 12
     },
     "北京-林芝": {
       "manual": true,
