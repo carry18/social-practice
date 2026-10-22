@@ -10,6 +10,9 @@ const KNOWN_CITIES = ["上海", "西安", "武汉", "合肥", "广州", "深圳"
   "福州", "宁德", "南京", "苏州", "无锡", "杭州", "重庆", "江门",
   "青岛", "沈阳", "大连", "长沙", "郑州", "天津", "济南", "兰州", "南宁"];
 
+/* 云函数实时查价（票价库未收录的分段在线查询 12306，失败回落"待查/手填"） */
+const LIVE_API = "https://1386267309-6stucp8l6g.ap-shanghai.tencentscf.com/";
+
 let FARES = null;
 
 /* ---------- 纯函数（可在 node 中测试） ---------- */
@@ -56,6 +59,10 @@ function segBasis(key, price, meta) {
   const m = meta || {};
   let src;
   if (m.manual) src = "人工录入·需复核" + (m.note ? "·" + m.note : "");
+  else if (m.live && m.train && m.window) {
+    const [w0, w1] = m.window.split("~");
+    src = `网页实时查询·${m.train}·窗口${(w0 || "").slice(5)}~${(w1 || "").slice(5)}·最高日${String(m.query_date || "").slice(5)}`;
+  }
   else if (m.train && m.window && m.window.includes("~")) {
     const [w0, w1] = m.window.split("~");
     src = `12306实时·${m.train}·窗口${w0.slice(5)}~${w1.slice(5)}·最高日${String(m.query_date || "").slice(5)}`;
@@ -123,6 +130,58 @@ function computeTeam(team, fares, cities) {
     P: `${fmtNum(Z)}/人·周*${weeks}周x${acTxt}`,
     S: ac === 1 ? "就协全部" : "院系1/3，剩余就协",
   };
+}
+
+/* ---------- 云函数实时查价（浏览器端） ---------- */
+
+function cityTokens(text, cities) {
+  // 先按已知城市表匹配；全未命中时按分隔符切词，作为实时查询的候选城市
+  const hits = parseCities(text, cities);
+  if (hits.length) return hits;
+  return String(text || "").replace(/\s+/g, "")
+    .split(/[、，,\/·—]+/)
+    .map(s => s.trim())
+    .filter(s => /^[一-龥]{2,5}$/.test(s) && !/承担住宿|住宿自理|实践|支队|基地/.test(s));
+}
+
+async function liveSegment(from, to) {
+  const url = LIVE_API + "?from=" + encodeURIComponent(from) + "&to=" + encodeURIComponent(to) + "&days=14";
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 75000);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal });
+    const d = await res.json();
+    if (d.error) throw new Error(d.error);
+    if (!(d.price > 0)) throw new Error("无直达车次");
+    return d;
+  } finally { clearTimeout(timer); }
+}
+
+async function prefetchLive(valid, onProgress) {
+  // 对票价库缺失的分段逐个实时查询，结果写入 FARES（内存，本次会话有效）
+  const segs = FARES.segments, meta = FARES.meta || (FARES.meta = {});
+  const failed = [];
+  for (const t of valid) {
+    const toks = cityTokens(t.B, knownCities(FARES));
+    if (!toks.length) continue;
+    const chain = ["北京", ...toks, "北京"];
+    for (let i = 0; i < chain.length - 1; i++) {
+      const key = `${chain[i]}-${chain[i + 1]}`, rev = `${chain[i + 1]}-${chain[i]}`;
+      if (segs[key] !== undefined || segs[rev] !== undefined) continue;
+      if (meta[key] && meta[key].live_failed) continue;
+      onProgress && onProgress(`⏳ 正在实时查询 ${key} 票价（约10~30秒）…`);
+      try {
+        const r = await liveSegment(chain[i], chain[i + 1]);
+        segs[key] = r.price;
+        meta[key] = { train: r.train, query_date: r.query_date, window: r.window,
+                      days_queried: r.days_queried, live: true };
+      } catch (e) {
+        meta[key] = { live_failed: true, note: String((e && e.message) || e) };
+        failed.push(key);
+      }
+    }
+  }
+  return failed;
 }
 
 /* ---------- xlsx 生成（复刻模板布局，公式+缓存值双写） ---------- */
@@ -441,9 +500,21 @@ if (typeof document !== "undefined") {
       `<tr><th colspan="6">合计</th><th>${fmtNum(computed.reduce((a, t) => a + t.AB, 0))}</th><th></th></tr>`;
   }
 
-  function computeAll() {
+  async function computeAll() {
     const valid = collectValid();
     if (!valid.length) { alert("请至少填写一支支队（实践地点 + 拟参访日期必填）"); return null; }
+    const btn = $("preview-btn");
+    btn.disabled = true;
+    const setStatus = msg => { $("fare-info").textContent = msg; };
+    let liveFailed = [];
+    try {
+      liveFailed = await prefetchLive(valid, setStatus);
+    } finally {
+      btn.disabled = false;
+      const n = Object.keys(FARES.segments || {}).length;
+      const updated = (FARES.meta && FARES.meta.updated_at) || "未知";
+      $("fare-info").textContent = `票价库：${n} 个分段 · 更新于 ${updated} · 取 12306 预售期 14 天窗口二等座最高价`;
+    }
     const cities = knownCities(FARES);
     const computed = valid.map(t => computeTeam(t, FARES, cities));
     const warns = [];
@@ -453,6 +524,8 @@ if (typeof document !== "undefined") {
       if (t.fare.status === "往返总价" || t.fare.status === "多城总价")
         warns.push(`「${t.B}」使用${t.fare.status}（非实时分段价）`);
     });
+    if (liveFailed.length)
+      warns.push(`以下分段实时查询失败或无直达车：${liveFailed.join("、")}——请手填"单人交通费"，或联系实践部用 --set 人工录入`);
     showWarn(warns);
     showPreview(computed);
     lastComputed = computed;
