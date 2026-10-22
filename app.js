@@ -106,9 +106,12 @@ function computeTeam(team, fares, cities) {
   const lodgingFree = /承担住宿|住宿自理/.test(
     [team.B, team.C, team.D, team.E, team.H].map(x => String(x || "")).join(""));
   const V = lodgingFree ? 0 : 300, Z = 30;
-  const fare = fareFor(cs, fares);
-  const T = fare.total;
-  const nights = days ? days - 1 : 0;
+  const manualT = Number(team.T_manual) > 0 ? Number(team.T_manual) : null;
+  const fare = manualT !== null
+    ? { status: "人工录入", total: manualT, expr: null,
+        basis: `单人交通费 ${fmtNum(manualT)}元[网页人工录入]` }
+    : fareFor(cs, fares);
+  const T = fare.total;  const nights = days ? days - 1 : 0;
   const weeks = days ? Math.ceil(days / 7) : 1;
   const W = Math.ceil(people / 2);
   const U = people * T * ac, Y = V * W * nights * ac, AA = Z * people * weeks * ac;
@@ -234,9 +237,129 @@ function buildWorkbook(computed) {
   return wb;
 }
 
+/* ---------- 公文版 docx 生成（复刻 gen_budget_docx.py 排版） ---------- */
+
+function docxDescs(t) {
+  // 与 Python 端 gen_budget_docx 的描述列口径一致
+  const rs = t.ac === 1 ? "" : " x 2/3";
+  return {
+    t_desc: t.fare.status === "待查" ? "待查" : `${fmtNum(t.T)}/人${rs}`,
+    l_desc: t.V === 0 ? "实践地承担"
+      : (t.ac === 1 ? `${fmtNum(t.V / 2)}/人·天*${t.nights}晚`
+                    : `${fmtNum(t.V / 2)}/人·天*2/3*${t.nights}晚`),
+    i_desc: t.weeks > 1 ? `${fmtNum(t.Z)}/人·周*${t.weeks}周${rs}` : `${fmtNum(t.Z)}/人${rs}`,
+    remark: (t.ac === 1 ? "就协全部" : "院系 1/3，剩余就协")
+      + (t.V === 0 ? "；部分经费由地方支持" : ""),
+  };
+}
+
+function buildDocx(computed, title, season) {
+  const D = globalThis.docx;
+  if (!D) throw new Error("docx 库未加载（需联网加载 CDN 脚本）");
+  const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
+          AlignmentType, WidthType, BorderStyle, VerticalAlign, TableLayoutType } = D;
+
+  const HP = pt => pt * 2;                       // half-points
+  const CM = cm => Math.round(cm * 567);         // twips
+  const F_BODY = { ascii: "Times New Roman", eastAsia: "仿宋_GB2312" };
+  const F_CELL = { ascii: "Times New Roman", eastAsia: "宋体" };
+  const F_TITLE = { ascii: "Times New Roman", eastAsia: "方正大标宋简体" };
+
+  const para = (text, font, pt, opts = {}) => new Paragraph({
+    alignment: opts.center ? AlignmentType.CENTER : AlignmentType.LEFT,
+    spacing: { after: 120 },
+    children: [new TextRun({ text, font, size: HP(pt), bold: !!opts.bold })],
+  });
+
+  const cell = (text, opts = {}) => new TableCell({
+    rowSpan: opts.rowSpan, columnSpan: opts.colSpan,
+    verticalAlign: VerticalAlign.CENTER,
+    width: opts.w ? { size: CM(opts.w), type: WidthType.DXA } : undefined,
+    children: String(text).split("\n").map(line => new Paragraph({
+      alignment: AlignmentType.CENTER,
+      children: [new TextRun({ text: line, font: F_CELL, size: HP(opts.pt || 9), bold: !!opts.bold })],
+    })),
+  });
+
+  const border = { style: BorderStyle.SINGLE, size: 2, color: "000000" };
+  const borders = { top: border, bottom: border, left: border, right: border,
+                    insideHorizontal: border, insideVertical: border };
+  const widths = [1.2, 4.5, 1.3, 3.0, 1.8, 3.6, 1.8, 2.4, 1.6, 1.8, 3.2]; // cm
+
+  const teams = computed.map(t => ({ ...t, ...docxDescs(t) }));
+  const total = teams.reduce((a, t) => a + t.AB, 0);
+
+  // 表头三行
+  const r0 = new TableRow({ children: [
+    cell("企业实习实践支队", { colSpan: 11, pt: 11, bold: true })] });
+  const r1 = new TableRow({ children: [
+    cell("序号", { rowSpan: 2, bold: true, w: widths[0] }),
+    cell("支队目的地", { rowSpan: 2, bold: true, w: widths[1] }),
+    cell("人数", { rowSpan: 2, bold: true, w: widths[2] }),
+    cell("交通", { colSpan: 2, bold: true }),
+    cell("住宿", { colSpan: 2, bold: true }),
+    cell("保险", { colSpan: 2, bold: true }),
+    cell("总计", { rowSpan: 2, bold: true, w: widths[9] }),
+    cell("备注", { rowSpan: 2, bold: true, w: widths[10] })] });
+  const r2 = new TableRow({ children: [
+    cell("单人往返费用", { bold: true }), cell("合计", { bold: true }),
+    cell("单间费用", { bold: true }), cell("合计", { bold: true }),
+    cell("单人费用", { bold: true }), cell("合计", { bold: true })] });
+
+  const dataRows = teams.map((t, i) => new TableRow({ children: [
+    cell(i + 1), cell(`${t.B}\n${t.D}`), cell(t.people),
+    cell(t.t_desc), cell(fmtNum(t.U)), cell(t.l_desc), cell(fmtNum(t.Y)),
+    cell(t.i_desc), cell(fmtNum(t.AA)), cell(fmtNum(t.AB)), cell(t.remark)] }));
+
+  const totalRow = new TableRow({ children: [
+    cell("合计", { colSpan: 4, bold: true }), cell(fmtNum(total), { colSpan: 7, bold: true })] });
+
+  const table = new Table({
+    layout: TableLayoutType.FIXED,
+    width: { size: widths.map(CM).reduce((a, b) => a + b, 0), type: WidthType.DXA },
+    columnWidths: widths.map(CM),
+    borders,
+    rows: [r0, r1, r2, ...dataRows, totalRow],
+  });
+
+  const intro = `职业发展中心于${season}组织【  】支基层实习实践支队、${teams.length}支企业主题实践支队。` +
+    `其中，基层实习实践支队实践预算为【  】元（基研会部分，另行填写）；` +
+    `企业主题实践支队${teams.length}支，预算共${fmtNum(total)}元。实践预算总额为【  】元，详情如下：`;
+
+  const note1 = "注：（1）上述预算中交通费用、保险费用为0的支队是表示由实习（实践）当地部门负责承担或同学自行承担交通费用和保险费用。" +
+    "交通费用一般按照高铁（二等座）来计算，更适合飞机出行的基地（路程远、机票费用低于高铁二等座）则按照机票费用来计算；" +
+    "保险费用按照平安保险-短期综合意外险费用计算。";
+  const note2 = "（2）与院系联合组织支队按照支持上限为“北京往返实践地交通费用+当地住宿费用总和2/3”的标准执行，不含保险、队旗及其他费用。";
+
+  return new Document({
+    sections: [{
+      properties: { page: {
+        size: { width: CM(29.7), height: CM(21) },   // 宽>高即横版（docx.js 的 orientation 会交换宽高，勿用）
+        margin: { left: CM(1.5), right: CM(1.5), top: CM(1.5), bottom: CM(1.5) },
+      } },
+      children: [
+        para(title, F_TITLE, 18, { center: true, bold: true }),
+        para(intro, F_BODY, 12),
+        table,
+        para("", F_BODY, 12),
+        para(note1, F_BODY, 10.5),
+        para(note2, F_BODY, 10.5),
+      ],
+    }],
+  });
+}
+
+function downloadBlob(blob, filename) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
 /* node 测试导出 */
 if (typeof module !== "undefined") {
-  module.exports = { fmtNum, knownCities, parseCities, parseDays, fareFor, ratioOf, computeTeam, buildWorkbook };
+  module.exports = { fmtNum, knownCities, parseCities, parseDays, fareFor, ratioOf, computeTeam, buildWorkbook, docxDescs, buildDocx };
 }
 
 /* ---------- 以下为浏览器 UI ---------- */
@@ -256,26 +379,26 @@ if (typeof document !== "undefined") {
     teams.forEach((t, i) => {
       const tr = document.createElement("tr");
       tr.innerHTML = `<td>${i + 1}</td>` +
-        ["B", "C", "D", "E", "F", "H"].map(c =>
+        ["B", "C", "D", "E", "F", "T_manual", "H"].map(c =>
           `<td><input data-i="${i}" data-c="${c}" value="${String(t[c] ?? "").replace(/"/g, "&quot;")}" ` +
           (c === "B" ? `list="city-list" ` : "") +
-          `placeholder="${{ B: "合肥、上海", C: "企业全称…", D: "就协", E: "7.19-7.23", F: "12", H: "0" }[c]}"></td>`).join("") +
+          `placeholder="${{ B: "可自由输入，如 合肥、上海", C: "企业全称…", D: "就协", E: "7.19-7.23", F: "12", T_manual: "自动", H: "0" }[c]}"></td>`).join("") +
         `<td><button data-del="${i}" style="border:none;background:none;cursor:pointer;color:#c00">✕</button></td>`;
       tb.appendChild(tr);
     });
     tb.querySelectorAll("input").forEach(inp => inp.addEventListener("input", e => {
       const i = +e.target.dataset.i, c = e.target.dataset.c;
-      teams[i][c] = c === "F" ? (Number(e.target.value) || "") : e.target.value;
+      teams[i][c] = (c === "F" || c === "T_manual") ? (Number(e.target.value) || "") : e.target.value;
       if (c === "E") {  // 日期即时校验：可解析变绿、不可解析变红、空白还原
         const v = e.target.value.trim();
         e.target.className = !v ? "" : (parseDays(v) ? "good" : "bad");
         e.target.title = e.target.className === "bad" ? "无法识别，格式应为 7.19-7.23" : "";
       }
-      if (c === "B" && FARES) {  // 地点即时校验：未识别到票价库城市时标红
+      if (c === "B" && FARES) {  // 地点：命中票价库变绿；库外城市不标红（可手填交通费），仅气泡提示
         const v = e.target.value.trim();
         const hit = !v || parseCities(v, knownCities(FARES)).length > 0;
-        e.target.className = !v ? "" : (hit ? "good" : "bad");
-        e.target.title = hit ? "" : "未识别到票价库中的城市，生成时将标'待查'";
+        e.target.className = (v && hit) ? "good" : "";
+        e.target.title = (v && !hit) ? "票价库未收录该地点：可照常在右侧「单人交通费」列手填票价" : "";
       }
       saveLocal();
     }));
@@ -308,22 +431,37 @@ if (typeof document !== "undefined") {
       `<tr><th colspan="6">合计</th><th>${fmtNum(computed.reduce((a, t) => a + t.AB, 0))}</th><th></th></tr>`;
   }
 
-  function generate() {
+  function computeAll() {
     const valid = collectValid();
-    if (!valid.length) { alert("请至少填写一支支队（实践地点 + 拟参访日期必填）"); return; }
+    if (!valid.length) { alert("请至少填写一支支队（实践地点 + 拟参访日期必填）"); return null; }
     const cities = knownCities(FARES);
     const computed = valid.map(t => computeTeam(t, FARES, cities));
     const warns = [];
     computed.forEach(t => {
-      if (t.fare.status === "待查") warns.push(`「${t.B}」票价${t.fare.basis}——xlsx 中 T 列留空，请查询后手填`);
+      if (t.fare.status === "待查") warns.push(`「${t.B}」${t.fare.basis}——可在网页"单人交通费"列直接手填后重新生成`);
       if (!t.days) warns.push(`「${t.B}」日期「${t.E}」无法识别，天数/住宿/保险未算`);
-      if (t.fare.status !== "分段" && t.fare.status !== "待查") warns.push(`「${t.B}」使用${t.fare.status}（非实时分段价）`);
+      if (t.fare.status === "往返总价" || t.fare.status === "多城总价")
+        warns.push(`「${t.B}」使用${t.fare.status}（非实时分段价）`);
     });
     showWarn(warns);
     showPreview(computed);
-    const wb = buildWorkbook(computed);
+    return computed;
+  }
+
+  function generate(fmt) {
+    const computed = computeAll();
+    if (!computed) return;
     const d = new Date(), pad = n => String(n).padStart(2, "0");
-    XLSX.writeFile(wb, `实践预算_${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}.xlsx`);
+    const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`;
+    if (fmt === "xlsx") {
+      const wb = buildWorkbook(computed);
+      XLSX.writeFile(wb, `实践预算_${stamp}.xlsx`);
+    } else {
+      const title = $("doc-title").value.trim() || "实践预算";
+      const season = $("doc-season").value.trim() || "本期";
+      docx.Packer.toBlob(buildDocx(computed, title, season))
+        .then(blob => downloadBlob(blob, `${title}.docx`));
+    }
   }
 
   /* 上传解析：找 B 列非空且 F 列为数字的行 */
@@ -362,7 +500,8 @@ if (typeof document !== "undefined") {
       teams.push({ B: "", C: "", D: "就协", E: "", F: 12, H: "" });
       renderEditor(); saveLocal();
     });
-    $("generate").addEventListener("click", generate);
+    $("generate").addEventListener("click", () => generate("xlsx"));
+    $("generate-docx").addEventListener("click", () => generate("docx"));
     $("drop").addEventListener("click", () => $("file").click());
     $("drop").addEventListener("dragover", e => { e.preventDefault(); $("drop").classList.add("hover"); });
     $("drop").addEventListener("dragleave", () => $("drop").classList.remove("hover"));

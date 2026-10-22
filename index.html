@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>实践支队预算表生成器 · 清华就协实践部</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.min.js"></script>
 <style>
   :root { --purple: #6f2d91; --purple-light: #f3eaf8; --gray: #666; }
   * { box-sizing: border-box; }
@@ -60,10 +61,11 @@
     <div id="panel-manual">
       <table class="editor" id="editor">
         <thead><tr>
-          <th style="width:36px">#</th><th style="width:15%">实践地点 *</th>
-          <th style="width:26%">拟主要参访点位</th><th style="width:12%">承办单位 *</th>
-          <th style="width:13%">拟参访日期 *</th><th style="width:8%">人数 *</th>
-          <th style="width:12%">院系已有支持</th><th style="width:40px"></th>
+          <th style="width:36px">#</th><th style="width:14%">实践地点 *</th>
+          <th style="width:24%">拟主要参访点位</th><th style="width:11%">承办单位 *</th>
+          <th style="width:12%">拟参访日期 *</th><th style="width:7%">人数 *</th>
+          <th style="width:11%">单人交通费<br><span style="font-weight:normal;font-size:11px">空=自动查库</span></th>
+          <th style="width:11%">院系已有支持</th><th style="width:36px"></th>
         </tr></thead>
         <tbody></tbody>
       </table>
@@ -71,7 +73,7 @@
         <button class="btn secondary" id="add-row">＋ 添加支队</button>
       </div>
       <p class="hint">
-        实践地点：按行程顺序写城市，如「合肥、上海」；承办单位：就协组织填「就协」（联合承办含"就协"即全额），院系联合填院系名（按 2/3 支持）；<br>
+        实践地点：按行程顺序写城市，如「合肥、上海」（输入时自动联想票价库城市；库外城市请在"单人交通费"列手填票价）；承办单位：就协组织填「就协」（联合承办含"就协"即全额），院系联合填院系名（按 2/3 支持）；<br>
         拟参访日期格式：7.19-7.23 或 7月19日-7月23日；点位/院系栏含「承担住宿」「住宿自理」字样时住宿费按 0 计。
       </p>
     </div>
@@ -86,9 +88,14 @@
   </div>
 
   <div class="card">
-    <h2>第二步 · 生成预算表</h2>
+    <h2>第二步 · 生成预算文件</h2>
     <p class="hint" id="fare-info">票价库加载中…</p>
-    <button class="btn" id="generate">生成并下载预算表 xlsx</button>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+      <label class="hint">公文标题 <input id="doc-title" value="2026年暑假“清华学子地域行”实践预算" style="width:300px;padding:4px 6px"></label>
+      <label class="hint">季度表述 <input id="doc-season" value="2026年暑期" style="width:110px;padding:4px 6px"></label>
+    </div>
+    <button class="btn" id="generate">下载预算表 xlsx</button>
+    <button class="btn" id="generate-docx" style="margin-left:10px">下载公文版 Word</button>
     <div class="warn" id="warn"></div>
     <table id="preview" style="display:none"></table>
   </div>
