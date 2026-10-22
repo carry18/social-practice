@@ -295,6 +295,30 @@ function buildWorkbook(computed) {
   // 注：对账区（过会金额/差额）仅内部 rebuild_budget.py 生成，网页版面向院系不附带
   const last = startRow + computed.length - 1;
 
+  // 模板配色（与 预算表模板.xlsx 一致）：院系提供区橙、呈现列蓝、辅助列绿、T列输入高亮黄
+  const FILL = { orange: "FFFFF2CC", blue: "FFD9E1F2", green: "FFE2EFDA", yellow: "FFFFE699" };
+  const fillOf = (ci, r) => {
+    if (r === 1 || r === 6) return ci <= 8 ? FILL.orange : ci <= 19 ? FILL.blue : FILL.green;
+    if (r >= startRow && r <= last) {
+      if (ci <= 8) return FILL.orange;
+      if (ci === 20) return FILL.yellow;
+    }
+    return null;
+  };
+  for (let r = 1; r <= last; r++) {
+    for (let ci = 1; ci <= 30; ci++) {
+      const rgb = fillOf(ci, r);
+      if (!rgb) continue;
+      const addr = `${colLetter(ci)}${r}`;
+      if (!ws[addr]) ws[addr] = { t: "s", v: "" };
+      ws[addr].s = { fill: { patternType: "solid", fgColor: { rgb } } };
+      if (r === 1 || r === 6) {
+        ws[addr].s.font = { bold: true };
+        ws[addr].s.alignment = { horizontal: "center", vertical: "center" };
+      }
+    }
+  }
+
   ws["!ref"] = `A1:AD${last}`;
   ws["!merges"] = [
     { s: { r: 0, c: 0 }, e: { r: 0, c: 7 } },
