@@ -292,16 +292,10 @@ function buildWorkbook(computed) {
     ws[`AD${r}`] = { t: "s", v: t.fare.basis };
   });
 
-  // 对账区
-  const last = startRow + computed.length - 1, chk = last + 2;
-  const total = computed.reduce((a, t) => a + t.AB, 0);
-  ws[`Q${chk}`] = { t: "s", v: "过会金额" };
-  ws[`Q${chk + 1}`] = { t: "s", v: "预算合计" };
-  setF(ws, `R${chk + 1}`, `SUM(R${startRow}:R${last})`, total);
-  ws[`Q${chk + 2}`] = { t: "s", v: "差额" };
-  setF(ws, `R${chk + 2}`, `R${chk}-R${chk + 1}`, -total);
+  // 注：对账区（过会金额/差额）仅内部 rebuild_budget.py 生成，网页版面向院系不附带
+  const last = startRow + computed.length - 1;
 
-  ws["!ref"] = `A1:AD${chk + 2}`;
+  ws["!ref"] = `A1:AD${last}`;
   ws["!merges"] = [
     { s: { r: 0, c: 0 }, e: { r: 0, c: 7 } },
     { s: { r: 0, c: 8 }, e: { r: 0, c: 18 } },
