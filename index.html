@@ -6,6 +6,7 @@
 <title>实践支队预算表生成器 · 清华就协实践部</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js"></script>
 <style>
   :root { --purple: #6f2d91; --purple-light: #f3eaf8; --gray: #666; }
   * { box-sizing: border-box; }
@@ -42,13 +43,22 @@
   #drop { border: 2px dashed #cbb3dd; border-radius: 10px; padding: 34px; text-align: center;
           color: var(--gray); cursor: pointer; }
   #drop.hover { background: var(--purple-light); }
+  #payout-drop { border: 2px dashed #cbb3dd; border-radius: 10px; padding: 26px; text-align: center;
+                 color: var(--gray); cursor: pointer; }
+  #payout-drop.hover { background: var(--purple-light); }
+  #payout-preview { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 12px; }
+  #payout-preview th, #payout-preview td { border: 1px solid #e0e0e0; padding: 6px 8px; text-align: left; vertical-align: top; }
+  #payout-preview th { background: var(--purple-light); }
+  #payout-preview td.squad { white-space: pre-line; }
+  #payout-status { font-size: 13px; line-height: 1.7; white-space: pre-wrap; margin-top: 10px; }
+  #payout-status.ok { color: #1a7f37; } #payout-status.err { color: #b3261e; }
   footer { text-align: center; color: #999; font-size: 12px; padding: 24px; }
 </style>
 </head>
 <body>
 <header>
   <h1>实践支队预算表生成器</h1>
-  <p>清华大学学生就业服务协会 · 实践部 ｜ 填好支队信息 → 一键生成完整预算表（含 12306 二等座最高票价）→ 下载 Excel</p>
+  <p>清华大学学生就业服务协会 · 实践部 ｜ 填好支队信息 → 一键生成完整预算表（含 12306 二等座最高票价）→ 下载 Excel ｜ 决算表上传 → 自动在金山文档新建打款院系工作表</p>
 </header>
 <main>
   <div class="card">
@@ -107,9 +117,29 @@
     <button class="btn secondary" id="upload-docx">上传调整后的 xlsx → 生成 Word</button>
     <span class="hint" id="docx-info" style="margin-left:8px"></span>
   </div>
+  <div class="card">
+    <h2>决算 → 打款院系表（报销决算表上传）</h2>
+    <p class="hint">收到新的实践<b>决算表</b>（.docx）后上传，自动提取「院系联合组织」支队（剔除“就协全部”），
+      经腾讯云函数调用金山文档 AirScript，在<b>打款汇总表格</b>中新建一个工作表；金额直接采用决算表中审核过的「总计」。</p>
+    <div id="payout-drop">点击选择或拖入决算表 docx<br>
+      <span class="hint">解析与生成全自动；下方可先核对预览</span>
+    </div>
+    <input type="file" id="payout-file" accept=".docx" style="display:none">
+    <div id="payout-result" style="display:none">
+      <p class="hint" style="margin-top:10px">新工作表名
+        <input id="payout-title" style="width:340px;padding:4px 6px;font-size:13px"></p>
+      <table id="payout-preview"></table>
+      <div style="margin-top:12px">
+        <button class="btn" id="payout-gen">🚀 在金山文档中新建工作表</button>
+        <button class="btn secondary" id="payout-xlsx" style="margin-left:10px">⬇️ 下载本地 xlsx 备份</button>
+      </div>
+      <div id="payout-status"></div>
+    </div>
+  </div>
 </main>
 <footer>数据不出浏览器：所有计算与文件生成均在本地完成 ｜ 票价库由实践部每期预算前刷新</footer>
 <datalist id="city-list"></datalist>
 <script src="app.js"></script>
+<script src="payout.js"></script>
 </body>
 </html>
