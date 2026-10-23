@@ -187,17 +187,47 @@
   }
   $('payout-gen').onclick = generate;
 
-  /* ================= 本地 xlsx 兜底（复用页面已加载的 XLSX） ================= */
+  /* ================= 本地 xlsx 兜底（复用页面已加载的 XLSX，含样式） ================= */
   $('payout-xlsx').onclick = function () {
     var headers = ['支队', '打款总金额', '打款院系', '打款金额', '项目负责人', '工作证号', '项目名称', '项目编号（需要是“100002/行政类”）'];
-    var aoa = [headers];
+    // 结构与金山在线版一致：第 1 行表头；第 2-3 行红色斜体示例；第 4 行起正式数据；末行合计
+    var demo = [
+      ['例子支队', 7300, 'A学院', 4000, 'xx', 'xxxxxx', '研究生暑期社会实践', 100002029],
+      ['', '', 'B学院', 3300, 'xx', 'xxxxxx', '研究生社会实践专项经费', 100002089]
+    ];
+    var aoa = [headers].concat(demo);
     for (var i = 0; i < parsedRows.length; i++) {
       aoa.push([parsedRows[i].squad, parsedRows[i].amount, '', '', '', '', '', '']);
     }
     aoa.push(['', '', '', '', '', '', '', '']); // 合计行
     var ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws['B' + (parsedRows.length + 2)] = { f: 'SUM(B2:B' + (parsedRows.length + 1) + ')', t: 'n' };
-    ws['!cols'] = [{ wch: 26 }, { wch: 12 }, { wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 26 }, { wch: 30 }];
+
+    var n = parsedRows.length, last = 3 + n, totalR = last + 1; // 1-based 行号
+    ws['B' + totalR] = { f: 'SUM(B4:B' + last + ')', t: 'n' };
+    ws['!cols'] = [{ wch: 30 }, { wch: 12 }, { wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 26 }, { wch: 32 }];
+    ws['!merges'] = [ // 示例行 A/B 列纵向合并（0-based）
+      { s: { r: 1, c: 0 }, e: { r: 2, c: 0 } },
+      { s: { r: 1, c: 1 }, e: { r: 2, c: 1 } }
+    ];
+
+    // 样式：表头紫底白字加粗；示例行红色斜体；合计行浅紫底加粗
+    var HEADER = { font: { name: '微软雅黑', sz: 11, bold: true, color: { rgb: 'FFFFFFFF' } },
+                   fill: { patternType: 'solid', fgColor: { rgb: 'FF6F2D91' } },
+                   alignment: { horizontal: 'center', vertical: 'center', wrapText: true } };
+    var DEMO = { font: { name: '微软雅黑', sz: 11, italic: true, color: { rgb: 'FFFF0000' } },
+                 alignment: { horizontal: 'center', vertical: 'center' } };
+    var BODY = { font: { name: '微软雅黑', sz: 11 }, alignment: { vertical: 'center', wrapText: true } };
+    var TOTAL = { font: { name: '微软雅黑', sz: 11, bold: true },
+                  fill: { patternType: 'solid', fgColor: { rgb: 'FFF3EAF8' } } };
+    var ref = XLSX.utils.decode_range(ws['!ref']);
+    for (var R = ref.s.r; R <= ref.e.r; R++) {
+      for (var C = ref.s.c; C <= ref.e.c; C++) {
+        var addr = XLSX.utils.encode_cell({ r: R, c: C });
+        if (!ws[addr]) ws[addr] = { t: 's', v: '' };
+        ws[addr].s = R === 0 ? HEADER : (R <= 2 ? DEMO : (R === totalR - 1 ? TOTAL : BODY));
+      }
+    }
+
     var wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, '打款院系');
     XLSX.writeFile(wb, ($('payout-title').value.trim() || '实践打款院系') + '.xlsx');
