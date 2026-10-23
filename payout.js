@@ -204,27 +204,45 @@
 
     var n = parsedRows.length, last = 3 + n, totalR = last + 1; // 1-based 行号
     ws['B' + totalR] = { f: 'SUM(B4:B' + last + ')', t: 'n' };
-    ws['!cols'] = [{ wch: 30 }, { wch: 12 }, { wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 26 }, { wch: 32 }];
+    // 样式 1:1 复刻《2026年春季学期暑期实践打款院系.xlsx》实测格式
+    ws['!cols'] = [{ wch: 14.3 }, { wch: 15.2 }, { wch: 17.5 }, { wch: 9.7 },
+                   { wch: 10.7 }, { wch: 11.8 }, { wch: 37 }, { wch: 36.5 }];
     ws['!merges'] = [ // 示例行 A/B 列纵向合并（0-based）
       { s: { r: 1, c: 0 }, e: { r: 2, c: 0 } },
       { s: { r: 1, c: 1 }, e: { r: 2, c: 1 } }
     ];
+    ws['!rows'] = [];
+    for (var rr = 3; rr < last; rr++) ws['!rows'][rr] = { hpt: 39 }; // 数据行高 39（0-based r=3 即第 4 行）
 
-    // 样式：表头紫底白字加粗；示例行红色斜体；合计行浅紫底加粗
-    var HEADER = { font: { name: '微软雅黑', sz: 11, bold: true, color: { rgb: 'FFFFFFFF' } },
-                   fill: { patternType: 'solid', fgColor: { rgb: 'FF6F2D91' } },
-                   alignment: { horizontal: 'center', vertical: 'center', wrapText: true } };
-    var DEMO = { font: { name: '微软雅黑', sz: 11, italic: true, color: { rgb: 'FFFF0000' } },
-                 alignment: { horizontal: 'center', vertical: 'center' } };
-    var BODY = { font: { name: '微软雅黑', sz: 11 }, alignment: { vertical: 'center', wrapText: true } };
-    var TOTAL = { font: { name: '微软雅黑', sz: 11, bold: true },
-                  fill: { patternType: 'solid', fgColor: { rgb: 'FFF3EAF8' } } };
+    var CENTER = { horizontal: 'center', vertical: 'center' };
+    var mkStyle = function (name, sz, extra) {
+      var o = { font: { name: name, sz: sz }, alignment: CENTER };
+      if (extra) for (var k in extra) o.font[k] = extra[k];
+      return o;
+    };
     var ref = XLSX.utils.decode_range(ws['!ref']);
     for (var R = ref.s.r; R <= ref.e.r; R++) {
       for (var C = ref.s.c; C <= ref.e.c; C++) {
         var addr = XLSX.utils.encode_cell({ r: R, c: C });
         if (!ws[addr]) ws[addr] = { t: 's', v: '' };
-        ws[addr].s = R === 0 ? HEADER : (R <= 2 ? DEMO : (R === totalR - 1 ? TOTAL : BODY));
+        var st;
+        if (R === 0) { // 表头：A1 宋体8 / B1 宋体11 / C:G 仿宋9加粗蓝底 / H 黄底红字
+          if (C === 0) st = mkStyle('宋体', 8);
+          else if (C === 1) st = mkStyle('宋体', 11);
+          else {
+            st = mkStyle('仿宋_GB2312', 9, { bold: true });
+            st.fill = { patternType: 'solid', fgColor: { rgb: 'FF00B0F0' } };
+            if (C === 7) { st.font.color = { rgb: 'FFFF0000' }; st.fill.fgColor.rgb = 'FFFFFF00'; }
+          }
+        } else if (R <= 2) { // 示例行：红色斜体；A列8号、B列11号、其余10号
+          st = mkStyle('宋体', C === 0 ? 8 : (C === 1 ? 11 : 10), { italic: true, color: { rgb: 'FFFF0000' } });
+        } else if (R === totalR - 1) { // 合计行
+          st = mkStyle('宋体', 11);
+        } else { // 正式数据：支队列宋体8自动换行，B列10号，其余11号
+          st = mkStyle('宋体', C === 0 ? 8 : (C === 1 ? 10 : 11));
+          if (C === 0) st.alignment = { horizontal: 'center', vertical: 'center', wrapText: true };
+        }
+        ws[addr].s = st;
       }
     }
 
