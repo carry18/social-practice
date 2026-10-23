@@ -296,6 +296,7 @@ function buildWorkbook(computed) {
   const last = startRow + computed.length - 1;
 
   // 模板配色（与 预算表模板.xlsx 一致）：院系提供区橙、呈现列蓝、辅助列绿、T列输入高亮黄
+  // 数据区全部自动换行+垂直居中，避免列宽不够文字挤在一起
   const FILL = { orange: "FFFFF2CC", blue: "FFD9E1F2", green: "FFE2EFDA", yellow: "FFFFE699" };
   const fillOf = (ci, r) => {
     if (r === 1 || r === 6) return ci <= 8 ? FILL.orange : ci <= 19 ? FILL.blue : FILL.green;
@@ -308,13 +309,17 @@ function buildWorkbook(computed) {
   for (let r = 1; r <= last; r++) {
     for (let ci = 1; ci <= 30; ci++) {
       const rgb = fillOf(ci, r);
-      if (!rgb) continue;
+      const isHeader = r === 1 || r === 6, isData = r >= startRow;
+      if (!rgb && !isHeader && !isData) continue;
       const addr = `${colLetter(ci)}${r}`;
       if (!ws[addr]) ws[addr] = { t: "s", v: "" };
-      ws[addr].s = { fill: { patternType: "solid", fgColor: { rgb } } };
-      if (r === 1 || r === 6) {
-        ws[addr].s.font = { bold: true };
-        ws[addr].s.alignment = { horizontal: "center", vertical: "center" };
+      const s = ws[addr].s || (ws[addr].s = {});
+      if (rgb) s.fill = { patternType: "solid", fgColor: { rgb } };
+      if (isHeader) {
+        s.font = { bold: true };
+        s.alignment = { horizontal: "center", vertical: "center", wrapText: true };
+      } else if (isData) {
+        s.alignment = { vertical: "center", wrapText: true };
       }
     }
   }
@@ -402,8 +407,19 @@ function buildDocx(computed, title, season) {
     cell("单间费用", { bold: true }), cell("合计", { bold: true }),
     cell("单人费用", { bold: true }), cell("合计", { bold: true })] });
 
+  // 支队目的地列：地点 12 号字、承办院系 10 号字（与公文样例一致）
+  const destCell = t => new TableCell({
+    verticalAlign: VerticalAlign.CENTER,
+    children: [
+      new Paragraph({ alignment: AlignmentType.CENTER,
+        children: [new TextRun({ text: String(t.B || ""), font: F_CELL, size: HP(12) })] }),
+      new Paragraph({ alignment: AlignmentType.CENTER,
+        children: [new TextRun({ text: String(t.D || ""), font: F_CELL, size: HP(10) })] }),
+    ],
+  });
+
   const dataRows = teams.map((t, i) => new TableRow({ children: [
-    cell(i + 1), cell(`${t.B}\n${t.D}`), cell(t.people),
+    cell(i + 1), destCell(t), cell(t.people),
     cell(t.t_desc), cell(fmtNum(t.U)), cell(t.l_desc), cell(fmtNum(t.Y)),
     cell(t.i_desc), cell(fmtNum(t.AA)), cell(fmtNum(t.AB)), cell(t.remark)] }));
 
