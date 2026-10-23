@@ -77,6 +77,31 @@
     return payouts;
   }
 
+  /* ================= 自动命名 ================= */
+  /**
+   * 根据文件名 / 文档首段自动识别工作表名：
+   *   「2026年暑假“清华学子地域行”实践决算 0918 v3.docx」→「2026暑期院系打款表」
+   * 识别不到年份时退化为「<文件名> 打款院系」。
+   */
+  function autoTitle(fileName, html) {
+    var sources = [fileName.replace(/\.docx$/i, '')];
+    var pm = /<p[^>]*>([\s\S]*?)<\/p>/.exec(html); // 文档第一个段落（通常是标题）
+    if (pm) sources.push(pm[1].replace(/<[^>]+>/g, ''));
+    var text = sources.join(' ');
+
+    var yearM = text.match(/(20\d{2})\s*年?/);
+    if (yearM) {
+      var term = '';
+      if (/暑假|暑期/.test(text)) term = '暑期';
+      else if (/寒假|冬季/.test(text)) term = '寒假';
+      else if (/春季|春学期/.test(text)) term = '春季';
+      else if (/秋季|秋学期/.test(text)) term = '秋季';
+      else if (/学期中/.test(text)) term = '学期中';
+      return yearM[1] + term + '院系打款表';
+    }
+    return sources[0] + ' 打款院系';
+  }
+
   /* ================= 交互 ================= */
   var drop = $('payout-drop'), fileInput = $('payout-file');
   if (!drop) return; // 页面没有该板块时静默退出
@@ -97,8 +122,7 @@
     }).then(function (result) {
       parsedRows = extractPayouts(htmlTables(result.value));
       if (!parsedRows.length) { alert('未解析到需要打款的院系联合组织支队'); return; }
-      var base = file.name.replace(/\.docx$/i, '').replace(/\s*v?\d+(\.\d+)*\s*$/i, '');
-      if (!$('payout-title').value) $('payout-title').value = base + ' 打款院系';
+      $('payout-title').value = autoTitle(file.name, result.value); // 自动命名，可手动改
       renderPreview();
       $('payout-result').style.display = 'block';
       $('payout-result').scrollIntoView({ behavior: 'smooth' });
