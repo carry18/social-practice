@@ -387,7 +387,7 @@ function buildDocx(computed, title, season) {
                     insideHorizontal: border, insideVertical: border };
   const widths = [0.9, 3.0, 0.9, 2.2, 1.3, 2.5, 1.3, 1.8, 1.2, 1.3, 1.6]; // cm，合计18cm适配竖版版心
 
-  const teams = computed.map(t => ({ ...t, ...docxDescs(t) }));
+  const teams = computed.map(t => t.t_desc !== undefined ? t : ({ ...t, ...docxDescs(t) }));
   const total = teams.reduce((a, t) => a + t.AB, 0);
 
   // 表头三行
@@ -469,9 +469,34 @@ function downloadBlob(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
 
+/* ---------- 调整后预算表 → 公文 Word 取值 ----------
+ * 优先读表内公式缓存值（用户在 Excel 里的手改随之生效），无缓存的行回退按 A-H 输入列重算 */
+function teamsFromSheet(ws, fares) {
+  const cities = knownCities(fares);
+  const range = XLSX.utils.decode_range(ws["!ref"]);
+  const out = [];
+  for (let r = range.s.r; r <= range.e.r; r++) {
+    const g = c => { const cell = ws[`${c}${r + 1}`]; return cell ? cell.v : undefined; };
+    const B = g("B");
+    if (!B || typeof B !== "string" || !B.trim()) continue;
+    const R = g("R"), K = g("K"), L = g("L"), M = g("M");
+    if (typeof R === "number" && typeof K === "number" && L !== undefined && M !== undefined) {
+      out.push({ B: String(B).trim(), D: String(g("D") || ""), people: K,
+        t_desc: String(L), U: Number(M) || 0,
+        l_desc: String(g("N") ?? ""), Y: Number(g("O")) || 0,
+        i_desc: String(g("P") ?? ""), AA: Number(g("Q")) || 0,
+        AB: R, remark: String(g("S") || "") });
+    } else if (typeof g("F") === "number") {
+      out.push(computeTeam({ B: String(B).trim(), C: g("C") || "", D: g("D") || "",
+        E: g("E") || "", F: g("F"), H: g("H") ?? "" }, fares, cities));
+    }
+  }
+  return out;
+}
+
 /* node 测试导出 */
 if (typeof module !== "undefined") {
-  module.exports = { fmtNum, knownCities, parseCities, parseDays, fareFor, ratioOf, computeTeam, buildWorkbook, docxDescs, buildDocx };
+  module.exports = { fmtNum, knownCities, parseCities, parseDays, fareFor, ratioOf, computeTeam, buildWorkbook, docxDescs, buildDocx, teamsFromSheet };
 }
 
 /* ---------- 以下为浏览器 UI ---------- */
@@ -627,6 +652,19 @@ if (typeof document !== "undefined") {
     $("tab-manual").click();
   }
 
+  async function handleDocxFile(file) {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf);
+    const name = wb.SheetNames.includes("各支队预算按实际人数校准") ? "各支队预算按实际人数校准" : wb.SheetNames[0];
+    const teams = teamsFromSheet(wb.Sheets[name], FARES);
+    if (!teams.length) { $("docx-info").textContent = "未识别到支队数据行"; return; }
+    const title = $("doc-title").value.trim() || "实践预算";
+    const season = $("doc-season").value.trim() || "本期";
+    docx.Packer.toBlob(buildDocx(teams, title, season))
+      .then(blob => downloadBlob(blob, `${title}.docx`));
+    $("docx-info").textContent = `已按表内数值生成 Word（${teams.length} 支支队，表：${name}）`;
+  }
+
   document.addEventListener("DOMContentLoaded", async () => {
     loadLocal(); renderEditor();
     $("tab-manual").addEventListener("click", () => {
@@ -652,6 +690,8 @@ if (typeof document !== "undefined") {
       if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
     });
     $("file").addEventListener("change", e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+    $("upload-docx").addEventListener("click", () => $("file-docx").click());
+    $("file-docx").addEventListener("change", e => { if (e.target.files[0]) handleDocxFile(e.target.files[0]); });
 
     try {
       const res = await fetch("fares.json");

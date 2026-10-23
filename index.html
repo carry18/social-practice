@@ -101,6 +101,11 @@
     <span class="hint">（先点"生成预览"核对下方表格，确认无误后再下载）</span>
     <div class="warn" id="warn"></div>
     <table id="preview" style="display:none"></table>
+    <hr style="border:none;border-top:1px dashed #e0d4ea;margin:16px 0">
+    <p class="hint"><b>已下载并在 Excel/WPS 里手动调整了预算表？</b>把调整后的文件传回来，按<b>表内数值</b>生成公文 Word（公式缓存值优先，请保存后再上传）：</p>
+    <input type="file" id="file-docx" accept=".xlsx,.xls" style="display:none">
+    <button class="btn secondary" id="upload-docx">上传调整后的 xlsx → 生成 Word</button>
+    <span class="hint" id="docx-info" style="margin-left:8px"></span>
   </div>
 </main>
 <footer>数据不出浏览器：所有计算与文件生成均在本地完成 ｜ 票价库由实践部每期预算前刷新</footer>
