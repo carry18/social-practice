@@ -121,6 +121,10 @@
     <h2>决算 → 打款院系表（报销决算表上传）</h2>
     <p class="hint">收到新的实践<b>决算表</b>（.docx）后上传，自动提取「院系联合组织」支队（剔除“就协全部”），
       经腾讯云函数调用金山文档 AirScript，在<b>打款汇总表格</b>中新建一个工作表；金额直接采用决算表中审核过的「总计」。</p>
+    <p class="hint" style="margin:4px 0 10px">
+      <button class="btn secondary" id="payout-check" type="button">🔍 接口自检</button>
+      <span id="payout-health" style="margin-left:8px"></span>
+    </p>
     <div id="payout-drop">点击选择或拖入决算表 docx<br>
       <span class="hint">解析与生成全自动；下方可先核对预览</span>
     </div>

@@ -17,6 +17,54 @@
   var $ = function (id) { return document.getElementById(id); };
   var parsedRows = [];
 
+  /* ================= 接口自检 ================= */
+  /**
+   * 静默检测全链路：网页 → 腾讯云函数 → 令牌 → 金山脚本。
+   * 不读取、不显示任何令牌；仅在失败时指出故障环节和修复方向。
+   */
+  function runCheck(manual) {
+    var el = $('payout-health');
+    if (!el) return;
+    el.textContent = '🔍 正在检测接口…';
+    el.style.color = '';
+    fetch(DEFAULT_HOOK, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ Context: { argv: { ping: true } } })
+    }).then(function (resp) {
+      return resp.text().then(function (t) { return { status: resp.status, text: t }; });
+    }).then(function (r) {
+      var data = null;
+      try { data = JSON.parse(r.text); } catch (e) {}
+      var errText = (data && data.error ? String(data.error) : '') + r.text;
+      var fail = function (msg) { el.textContent = '❌ ' + msg; el.style.color = '#b3261e'; };
+
+      if (r.status === 401 || r.status === 403 || /token|令牌|unauthor/i.test(errText)) {
+        return fail('金山脚本令牌无效或已过期（默认 180 天）→ 管理员：金山脚本编辑器重新生成令牌，更新腾讯云函数环境变量 AIRSCRIPT_TOKEN');
+      }
+      if (/server misconfigured/.test(errText)) {
+        return fail('腾讯云函数缺少环境变量 → 管理员：函数配置中补齐 KDOCS_WEBHOOK / AIRSCRIPT_TOKEN');
+      }
+      if (/rows 为空/.test(errText)) {
+        // 老版本脚本不支持 ping，但报错本身证明链路是通的
+        el.textContent = '✅ 接口正常（代理 → 令牌 → 金山脚本全链路连通）';
+        el.style.color = '#1a7f37'; return;
+      }
+      if (data && data.data && data.data.result === 'pong') {
+        el.textContent = '✅ 接口正常（代理 → 令牌 → 金山脚本全链路连通）';
+        el.style.color = '#1a7f37'; return;
+      }
+      if (data && data.error) {
+        return fail('金山脚本执行报错：' + data.error + ' → 管理员：检查脚本编辑器里的代码是否为最新版本');
+      }
+      fail('返回内容无法识别：' + r.text.slice(0, 120));
+    }).catch(function () {
+      el.textContent = '❌ 无法连接腾讯云函数 → 检查函数 URL 是否失效，或函数环境变量 ALLOWED_ORIGIN 是否包含本站域名';
+      el.style.color = '#b3261e';
+    });
+    if (manual) setStatus(''); // 手动点击时清掉旧状态
+  }
+
   /* ================= docx 解析 ================= */
   function htmlTables(html) {
     var tables = [];
@@ -105,6 +153,11 @@
   /* ================= 交互 ================= */
   var drop = $('payout-drop'), fileInput = $('payout-file');
   if (!drop) return; // 页面没有该板块时静默退出
+
+  // 页面加载即静默自检一次；也可点「接口自检」按钮手动复测
+  var checkBtn = $('payout-check');
+  if (checkBtn) checkBtn.onclick = function () { runCheck(true); };
+  runCheck(false);
 
   drop.onclick = function () { fileInput.click(); };
   drop.ondragover = function (e) { e.preventDefault(); drop.classList.add('hover'); };
