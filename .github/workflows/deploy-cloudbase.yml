@@ -1,0 +1,39 @@
+name: 同步到 CloudBase 静态托管（国内可访问镜像）
+
+# 触发时机：
+# 1. 人工 push（排除票价机器人的 fares.json 提交——它由下面的 workflow_run 接力）；
+# 2. 「刷新12306票价库」成功跑完（机器人用 GITHUB_TOKEN push 不会触发 push 事件，
+#    所以用 workflow_run 在票价刷新后同步最新 fares.json）；
+# 3. Actions 页面手动运行。
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'fares.json'
+      - 'station_codes.json'
+  workflow_run:
+    workflows: ['刷新12306票价库']
+    types: [completed]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main # 始终取 main 最新（含票价机器人刚提交的 fares.json）
+      - name: 准备部署目录（排除 .git / .github）
+        run: |
+          mkdir -p dist
+          rsync -a --delete --exclude='.git' --exclude='.github' --exclude='dist' ./ dist/
+      - name: 部署到 CloudBase 静态托管
+        uses: TencentCloudBase/cloudbase-action@v2
+        with:
+          secretId: ${{ secrets.TENCENTCLOUD_SECRET_ID }}
+          secretKey: ${{ secrets.TENCENTCLOUD_SECRET_KEY }}
+          envId: ${{ secrets.TCB_ENV_ID }}
+          staticSrcPath: ./dist
+          staticDestPath: /
