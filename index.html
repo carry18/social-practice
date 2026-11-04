@@ -58,7 +58,7 @@
 <body>
 <header>
   <h1>实践支队预算表生成器</h1>
-  <p>清华大学学生就业服务协会 · 实践部 ｜ 填好支队信息 → 一键生成完整预算表（含 12306 二等座最高票价）→ 下载 Excel ｜ 决算表上传 → 自动在金山文档新建打款院系工作表</p>
+  <p>清华大学学生就业服务协会 · 实践部 ｜ 填好支队信息 → 一键生成完整预算表（含 12306 二等座最高票价）→ 下载 Excel ｜ 决算表上传 → 自动在金山文档新建打款院系工作表 ｜ <a href="map.html" style="color:#fff;text-decoration:underline">🗺️ 实践地图</a></p>
 </header>
 <main>
   <div class="card">
@@ -140,10 +140,30 @@
       <div id="payout-status"></div>
     </div>
   </div>
+
+  <div class="card">
+    <h2>打款院系表 → 拨付说明（Word 下载 + 金山同步）</h2>
+    <p class="hint">在打款汇总表格里<b>补全院系/负责人/工作证号/项目编号</b>后，点「生成拨付说明」：
+      自动从金山读取数据 → ① 下载正式 Word 说明（报送财务用）② 在同一金山工作簿新建「拨付说明」工作表存档。</p>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+      <label class="hint">打款工作表
+        <input id="note-sheet" list="note-sheet-list" placeholder="如 2026暑期院系打款表"
+               style="width:210px;padding:4px 6px;font-size:13px">
+        <datalist id="note-sheet-list"></datalist>
+      </label>
+      <button class="btn secondary" id="note-refresh" type="button">🔄 刷新列表</button>
+      <label class="hint">专项名称
+        <input id="note-topic" value="企业主题实践专项" style="width:150px;padding:4px 6px;font-size:13px">
+      </label>
+    </div>
+    <button class="btn" id="note-gen">📄 生成拨付说明</button>
+    <div id="note-status" style="font-size:13px;line-height:1.7;white-space:pre-wrap;margin-top:10px"></div>
+  </div>
 </main>
 <footer>数据不出浏览器：所有计算与文件生成均在本地完成 ｜ 票价库由实践部每期预算前刷新</footer>
 <datalist id="city-list"></datalist>
 <script src="app.js"></script>
 <script src="payout.js"></script>
+<script src="note.js"></script>
 </body>
 </html>
