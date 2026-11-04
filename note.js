@@ -304,6 +304,7 @@
         sheetName: yt.y + yt.tShort + '拨付说明',
         separate: true,
         cleanup: true,
+        dirUrl: (($('note-dir') && $('note-dir').value.trim()) || undefined),
         note: {
           title1: meta.title1, title2: meta.title2, body: meta.body, attach: meta.attach,
           rows: tableRows, total: totalStr
