@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>实践地图 · 清华就协实践部</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<style>
+  :root { --purple: #6f2d91; --purple-light: #f3eaf8; --gray: #666; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+         margin: 0; background: #fafafa; color: #222; }
+  header { background: var(--purple); color: #fff; padding: 18px 28px;
+           display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+  header h1 { margin: 0; font-size: 20px; }
+  header p { margin: 0; font-size: 13px; opacity: .85; }
+  header a { color: #fff; font-size: 13px; opacity: .85; margin-left: auto; }
+  main { max-width: 1240px; margin: 24px auto; padding: 0 16px; }
+  .card { background: #fff; border: 1px solid #e5e5e5; border-radius: 10px;
+          padding: 20px 24px; margin-bottom: 20px; }
+  .toolbar { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+  .toolbar label { font-size: 13px; color: var(--gray); }
+  .toolbar select { padding: 5px 8px; font-size: 13px; border: 1px solid #d9c6e6;
+                    border-radius: 6px; color: #333; background: #fff; }
+  .btn { background: var(--purple); color: #fff; border: none; padding: 8px 20px;
+         border-radius: 8px; font-size: 14px; cursor: pointer; }
+  .btn.secondary { background: #fff; color: var(--purple); border: 1px solid var(--purple);
+                   padding: 6px 14px; font-size: 13px; }
+  #summary { font-size: 13px; color: var(--gray); }
+  .layout { display: flex; gap: 20px; align-items: flex-start; }
+  #map { flex: 1 1 auto; min-width: 0; height: 640px; }
+  #side { flex: 0 0 340px; max-height: 640px; overflow-y: auto; font-size: 13px;
+          border-left: 2px solid var(--purple-light); padding-left: 16px; }
+  #side h3 { margin: 14px 0 4px; font-size: 14px; color: var(--purple); }
+  #side h3:first-child { margin-top: 0; }
+  #side .city { color: #444; margin: 2px 0; }
+  #side .months { color: #888; }
+  #drop { border: 2px dashed #cbb3dd; border-radius: 10px; padding: 26px; text-align: center;
+          color: var(--gray); cursor: pointer; font-size: 14px; }
+  #drop.hover { background: var(--purple-light); }
+  .hint { font-size: 12px; color: var(--gray); line-height: 1.7; }
+  #upload-status { font-size: 13px; margin-top: 10px; white-space: pre-wrap; }
+  #upload-status.ok { color: #1a7f37; } #upload-status.err { color: #b3261e; }
+  footer { text-align: center; color: #999; font-size: 12px; padding: 24px; }
+  @media (max-width: 900px) { .layout { flex-direction: column; } #side { flex: none; width: 100%; max-height: none; border-left: none; padding-left: 0; } #map { width: 100%; } }
+.embed header, .embed footer { display: none; }
+  .embed main { margin: 8px auto; }
+</style>
+</head>
+<body>
+<header>
+  <h1>实践地图</h1>
+  <p>清华大学学生就业服务协会 · 实践部 ｜ 各年各月实践足迹一览</p>
+  <a href="index.html">← 返回预算表生成器</a>
+</header>
+<main>
+  <div class="card">
+    <div class="toolbar">
+      <label>年份
+        <select id="f-year"><option value="">全部</option></select>
+      </label>
+      <label>月份
+        <select id="f-month"><option value="">全部</option></select>
+      </label>
+      <label style="cursor:pointer"><input type="checkbox" id="callout-mode" checked> 连线标注（仿 PPT）</label>
+      <label style="cursor:pointer"><input type="checkbox" id="all-lines"> 显示全部连线</label>
+      <span class="hint">悬停省份显示连线，点击可钉住</span>
+      <button class="btn secondary" id="export-png">⬇️ 导出 PNG</button>
+      <span id="summary"></span>
+    </div>
+    <div class="layout">
+      <div id="map"></div>
+      <div id="side"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin:0 0 12px;font-size:16px;color:var(--purple)">更新数据</h2>
+    <p class="hint">金山文档《工作统计》有更新时：在金山文档里「下载为 xlsx」，把文件拖到这里即可即时预览新地图；
+      确认无误后点「下载 map_data.json」替换仓库里的同名文件并提交，网页上的地图就正式更新了。</p>
+    <p class="hint">解析口径：<b>支队实践表</b>（表名如「2026年1月-寒假」）读「地点 + 参访时间」，一行多城市（如「辽宁沈阳、吉林长春」）每城各记 1 支，
+      月份取出发月，「实践取消」的行不计；<b>开放日/行业之声表</b>每个活动记北京市 1 支；「数据统计」等汇总表自动跳过。</p>
+    <div id="drop">点击选择或拖入统计表 xlsx</div>
+    <input type="file" id="file" accept=".xlsx,.xls" style="display:none">
+    <div style="margin-top:10px;display:none" id="upload-actions">
+      <button class="btn" id="download-json">⬇️ 下载 map_data.json</button>
+      <button class="btn secondary" id="revert" style="margin-left:10px">↩️ 还原为已发布数据</button>
+    </div>
+    <div id="upload-status"></div>
+  </div>
+</main>
+<footer>数据来源：实践部金山文档统计表 ｜ 地图底图：自然资源部标准地图服务（DataV GeoAtlas 边界数据）｜ 数据不出浏览器</footer>
+<script src="map.js"></script>
+<script>
+if (/[?&]embed=1/.test(location.search)) document.documentElement.classList.add('embed');
+</script>
+</body>
+</html>

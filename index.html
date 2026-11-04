@@ -15,7 +15,31 @@
   header { background: var(--purple); color: #fff; padding: 18px 28px; }
   header h1 { margin: 0; font-size: 20px; }
   header p { margin: 6px 0 0; font-size: 13px; opacity: .85; }
-  main { max-width: 1080px; margin: 24px auto; padding: 0 16px; }
+  .layout { max-width: 1280px; margin: 20px auto; padding: 0 16px;
+            display: flex; gap: 20px; align-items: flex-start; }
+  main { flex: 1; min-width: 0; }
+  aside.side { width: 190px; flex: 0 0 190px; position: sticky; top: 16px;
+               display: flex; flex-direction: column; gap: 8px; background: #fff;
+               border: 1px solid #e5e5e5; border-radius: 12px; padding: 12px; }
+  aside.side .side-h { font-size: 12px; color: #999; padding: 2px 6px 6px; }
+  aside.side .side-btn { text-align: left; border: none; background: #f6f0fa; color: var(--purple);
+                         padding: 10px 12px; border-radius: 9px; cursor: pointer; font-size: 14px;
+                         text-decoration: none; display: block; font-family: inherit; }
+  aside.side .side-btn:hover { background: var(--purple-light); }
+  aside.side .side-btn.active { background: var(--purple); color: #fff; }
+  @media (max-width: 760px) { .layout { flex-direction: column; } aside.side { width: 100%; flex: none; position: static; flex-direction: row; flex-wrap: wrap; } }
+  .stat-row { display: flex; gap: 12px; flex-wrap: wrap; margin: 6px 0 16px; }
+  .stat { flex: 1 1 150px; background: var(--purple-light); border-radius: 10px; padding: 12px 14px; }
+  .stat .k { font-size: 12px; color: var(--gray); }
+  .stat .v { font-size: 20px; font-weight: 600; color: var(--purple); margin-top: 4px; }
+  table.ov { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+  table.ov th, table.ov td { border: 1px solid #eee; padding: 8px; text-align: right; }
+  table.ov th:first-child, table.ov td:first-child { text-align: left; }
+  table.ov thead th { background: var(--purple-light); }
+  table.ov tbody tr { cursor: pointer; }
+  table.ov tbody tr:hover { background: #fbf7fd; }
+  table.ov tr.detail td { background: #fcfcfc; font-size: 12px; }
+  .pos { color: #1a7f37; } .neg { color: #b3261e; }
   .card { background: #fff; border: 1px solid #e5e5e5; border-radius: 10px;
           padding: 20px 24px; margin-bottom: 20px; }
   .card h2 { margin: 0 0 12px; font-size: 16px; color: var(--purple); }
@@ -67,16 +91,42 @@
   <h1>实践部经费助手</h1>
   <p>清华大学学生就业服务协会 · 实践部 ｜ 预算编制 · 决算打款 · 拨付说明 ｜ <a href="map.html" style="color:#fff;text-decoration:underline">🗺️ 实践地图</a></p>
 </header>
-<main>
-  <div class="main-tabs" role="tablist">
-    <button data-view="budget" class="active" role="tab">📋 预算编制</button>
-    <button data-view="payout" role="tab">🧾 决算与打款</button>
-    <button data-view="note" role="tab">📄 拨付说明</button>
-  </div>
+<div class="layout">
+<aside class="side">
+  <div class="side-h">模块</div>
+  <button class="side-btn active" data-view="overview">📊 总览监控</button>
+  <button class="side-btn" data-view="ops">⚙️ 操作执行</button>
+  <a class="side-btn" href="map.html" target="_blank" rel="noopener">🗺️ 地图（新窗口）</a>
+</aside>
 
-  <div id="view-budget">
+<main>
+
+  <!-- ================= 模块一：总览监控 ================= -->
+  <section id="view-overview">
+    <div class="card">
+      <h2>历年预算 vs 决算</h2>
+      <p class="hint">数据来自金山打款汇总表里所有「名字含『决算』」的工作表（现在有 <span id="ov-src">—</span>）。
+        预算取 L 列「预算额」，决算取 K 列「决算金额」。</p>
+      <div id="ov-stats" class="stat-row"></div>
+      <div id="ov-body"><p class="hint">正在读取…</p></div>
+      <p class="hint" style="margin-top:12px">
+        <button class="btn secondary" id="ov-refresh" type="button">🔄 刷新数据</button>
+        <span id="ov-msg" style="margin-left:8px"></span>
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>实践地图</h2>
+      <p class="hint">各期实践地点分布（可在新窗口打开获得更大视图）。</p>
+      <iframe src="map.html?embed=1" style="width:100%;height:640px;border:0;border-radius:8px;background:#fff"
+              loading="lazy" title="实践地图"></iframe>
+    </div>
+  </section>
+
+  <!-- ================= 模块二：操作执行 ================= -->
+  <section id="view-ops" hidden>
   <div class="card">
-    <h2>第一步 · 录入支队信息</h2>
+    <h2>① 录入支队信息</h2>
     <div class="tabs">
       <button id="tab-manual" class="active">手动填写</button>
       <button id="tab-upload">上传院系申报表 (xlsx)</button>
@@ -112,7 +162,7 @@
   </div>
 
   <div class="card">
-    <h2>第二步 · 生成预算文件</h2>
+    <h2>② 生成预算文件</h2>
     <p class="hint" id="fare-info">票价库加载中…</p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
       <label class="hint">公文标题 <input id="doc-title" value="2026年暑假“清华学子地域行”实践预算" style="width:300px;padding:4px 6px"></label>
@@ -131,11 +181,9 @@
     <button class="btn secondary" id="upload-docx">上传调整后的 xlsx → 生成 Word</button>
     <span class="hint" id="docx-info" style="margin-left:8px"></span>
   </div>
-  </div><!-- /view-budget -->
 
-  <div id="view-payout" hidden>
   <div class="card">
-    <h2>决算 → 打款院系表（报销决算表上传）</h2>
+    <h2>③ 决算 → 打款院系表</h2>
     <p class="hint">收到新的实践<b>决算表</b>（.docx）后上传，自动提取「院系联合组织」支队（剔除“就协全部”），
       经腾讯云函数调用金山文档 AirScript，在<b>打款汇总表格</b>中新建一个工作表；金额直接采用决算表中审核过的「总计」。</p>
     <p class="hint" style="margin:4px 0 10px">
@@ -158,13 +206,10 @@
     </div>
   </div>
 
-  </div><!-- /view-payout -->
-
-  <div id="view-note" hidden>
   <div class="card">
-    <h2>打款院系表 → 拨付说明（Word 下载 + 金山同步）</h2>
+    <h2>④ 拨付说明（Word + 金山归档）</h2>
     <p class="hint">在打款汇总表格里<b>补全院系/负责人/工作证号/项目编号</b>后，点「生成拨付说明」：
-      自动从金山读取数据 → ① 下载正式 Word 说明（报送财务用）② 在同一金山工作簿新建「拨付说明」工作表存档。</p>
+      自动从金山读取数据 → ① 下载正式 Word 说明（报送财务用）② 写入金山「拨付说明」文件里对应学期的工作表。</p>
     <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
       <label class="hint">打款工作表
         <select id="note-sheet" style="width:230px;padding:4px 6px;font-size:13px"></select>
@@ -177,14 +222,16 @@
     <button class="btn" id="note-gen">📄 生成拨付说明</button>
     <div id="note-status" style="font-size:13px;line-height:1.7;white-space:pre-wrap;margin-top:10px"></div>
   </div>
-  </div><!-- /view-note -->
+  </section>
+
 </main>
+</div><!-- /layout -->
 <footer>数据不出浏览器：所有计算与文件生成均在本地完成 ｜ 票价库由实践部每期预算前刷新</footer>
 <datalist id="city-list"></datalist>
 <script>
 (function () {
-  var btns = Array.prototype.slice.call(document.querySelectorAll('.main-tabs button'));
-  var views = { budget: 'view-budget', payout: 'view-payout', note: 'view-note' };
+  var btns = Array.prototype.slice.call(document.querySelectorAll('aside.side .side-btn[data-view]'));
+  var views = { overview: 'view-overview', ops: 'view-ops' };
   function show(v) {
     if (!views[v]) v = 'budget';
     Object.keys(views).forEach(function (k) {
@@ -195,15 +242,17 @@
       b.classList.toggle('active', b.getAttribute('data-view') === v);
     });
     try { localStorage.setItem('sj_view', v); } catch (e) {}
+    if (v === 'overview' && window.SJ_OVERVIEW) window.SJ_OVERVIEW.load();
   }
   btns.forEach(function (b) {
     b.addEventListener('click', function () { show(b.getAttribute('data-view')); });
   });
   var last = null;
   try { last = localStorage.getItem('sj_view'); } catch (e) {}
-  show(last || 'budget');
+  show(last || 'overview');
 })();
 </script>
+<script src="overview.js"></script>
 <script src="app.js"></script>
 <script src="payout.js"></script>
 <script src="note.js"></script>
