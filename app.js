@@ -637,13 +637,30 @@ if (typeof document !== "undefined") {
     return d.data && d.data.result;
   }
 
-  async function syncBudget() {
-    const computed = lastComputed;
-    if (!computed) { alert("请先点击「生成预览」核对数据"); return; }
+  /** 把「上传的调整后表格」转成金山预算表的行 */
+  function uploadedRows(list) {
+    return list.map((t, i) => {
+      const people = Number(t.people) || 0;
+      const ac = /就协|就业协会/.test(String(t.D || "")) ? 1 : 2 / 3;
+      const U = Number(t.U) || 0;
+      const T = people ? U / people / ac : 0;
+      return [i + 1, t.B || "", t.C || "", t.D || "", t.E || "", people,
+              fmtNum(T), fmtNum(U), fmtNum(Number(t.Y) || 0),
+              fmtNum(Number(t.AA) || 0), fmtNum(Number(t.AB) || 0), t.remark || t.S || ""];
+    });
+  }
+
+  async function syncBudget(fromUpload) {
+    const base = fromUpload ? lastUploaded : lastComputed;
+    if (!base || !base.length) {
+      alert(fromUpload ? "请先上传调整后的预算表" : "请先点击「生成预览」核对数据");
+      return;
+    }
+    const computed = base;
     const btn = $("budget-sync"), info = $("budget-sync-info");
 
     // ① 确认是否为最终版
-    const totalAB = computed.reduce((a, t) => a + t.AB, 0);
+    const totalAB = computed.reduce((a, t) => a + (Number(t.AB) || 0), 0);
     const okFinal = confirm(
       "即将写入金山预算表：\n\n" +
       "工作表：" + budgetSheetName() + "\n" +
@@ -676,11 +693,11 @@ if (typeof document !== "undefined") {
 
     btn.disabled = true;
     info.textContent = "正在写入金山…";
-    const rows = computed.map((t, i) => [
+    const rows = fromUpload ? uploadedRows(computed) : computed.map((t, i) => [
       i + 1, t.B, t.C || "", t.D || "", t.E || "", t.people,
       fmtNum(t.T), fmtNum(t.U), fmtNum(t.Y), fmtNum(t.AA), fmtNum(t.AB), t.S || ""
     ]);
-    const sumBy = k => computed.reduce((a, t) => a + t[k], 0);
+    const sumBy = k => computed.reduce((a, t) => a + (Number(t[k]) || 0), 0);
     try {
       const r = await callBudget({
         action: "syncBudget",
@@ -781,6 +798,8 @@ if (typeof document !== "undefined") {
     $("tab-manual").click();
   }
 
+  let lastUploaded = null;   // 最近一次「上传调整后的 xlsx」解析出的支队数据
+
   async function handleDocxFile(file) {
     const buf = await file.arrayBuffer();
     const wb = XLSX.read(buf);
@@ -791,7 +810,9 @@ if (typeof document !== "undefined") {
     const season = $("doc-season").value.trim() || "本期";
     docx.Packer.toBlob(buildDocx(teams, title, season))
       .then(blob => downloadBlob(blob, `${title}.docx`));
-    $("docx-info").textContent = `已按表内数值生成 Word（${teams.length} 支支队，表：${name}）`;
+    lastUploaded = teams;
+    if ($("upload-sync")) $("upload-sync").disabled = false;
+    $("docx-info").textContent = `已按表内数值生成 Word（${teams.length} 支支队，表：${name}）；可点右侧按钮同步到金山`;
   }
 
   document.addEventListener("DOMContentLoaded", async () => {
@@ -814,6 +835,7 @@ if (typeof document !== "undefined") {
     if ($("budget-sync")) $("budget-sync").addEventListener("click", syncBudget);
     if ($("budget-load-refresh")) $("budget-load-refresh").addEventListener("click", refreshBudgetList);
     if ($("budget-load")) $("budget-load").addEventListener("click", loadBudgetFromSheet);
+    if ($("upload-sync")) $("upload-sync").addEventListener("click", () => syncBudget(true));
     $("drop").addEventListener("click", () => $("file").click());
     $("drop").addEventListener("dragover", e => { e.preventDefault(); $("drop").classList.add("hover"); });
     $("drop").addEventListener("dragleave", () => $("drop").classList.remove("hover"));
