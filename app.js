@@ -776,7 +776,12 @@ if (typeof document !== "undefined") {
         H: ""
       }));
       renderEditor(); saveLocal(); invalidate();
-      info.textContent = `✅ 已读回「${name}」的 ${rows.length} 支支队，可直接修改后重新预览`;
+      if (lastUploadedGrid) {
+        patchGridWithTeams(lastUploadedGrid, teams);
+        info.textContent = `✅ 已读回「${name}」的 ${rows.length} 支支队；同步时将按你上传的完整列模板写入`;
+      } else {
+        info.textContent = `✅ 已读回「${name}」的 ${rows.length} 支支队（当前无完整模板，同步会是精简列；上传一次原表后即可全列写入）`;
+      }
     } catch (e) {
       info.textContent = "读取失败：" + e.message;
     }
@@ -881,6 +886,71 @@ if (typeof document !== "undefined") {
     return { cells, cols, rows, merges, styles, ncols: Math.min(range.e.c + 1, 60) };
   }
 
+  /** 找出网格里的表头行与关键列号 */
+  function gridHeader(grid) {
+    const rowsWithCells = {};
+    grid.cells.forEach(([r, c, v]) => {
+      (rowsWithCells[r] = rowsWithCells[r] || {})[c] = String(v);
+    });
+    for (let r = 0; r <= 12; r++) {
+      const row = rowsWithCells[r];
+      if (!row) continue;
+      let placeCol = -1;
+      Object.keys(row).forEach(c => {
+        const t = (row[c] || "").replace(/\s/g, "");
+        if (t.indexOf("实践地点") >= 0 && placeCol < 0) placeCol = Number(c);
+      });
+      if (placeCol >= 0) {
+        const cols = { place: placeCol };
+        Object.keys(row).forEach(c => {
+          const t = (row[c] || "").replace(/\s/g, "");
+          const i = Number(c);
+          if (t.indexOf("点位") >= 0 && cols.point === undefined) cols.point = i;
+          if (t.indexOf("承办") >= 0 && cols.dept === undefined) cols.dept = i;
+          if (t.indexOf("日期") >= 0 && cols.date === undefined) cols.date = i;
+          if (t.indexOf("人数") >= 0 && cols.people === undefined) cols.people = i;
+          if ((t.indexOf("单人交通") >= 0 || t.indexOf("往返交通") >= 0) && cols.fare === undefined) cols.fare = i;
+        });
+        return { headerRow: r, cols };
+      }
+    }
+    return null;
+  }
+
+  /** 把编辑表格里的值套回完整网格（保留列布局与样式） */
+  function patchGridWithTeams(grid, list) {
+    const h = gridHeader(grid);
+    if (!h) return;
+    const dataRows = {};
+    grid.cells.forEach(([r, c, v]) => { (dataRows[r] = dataRows[r] || {})[c] = v; });
+    const rowIdx = Object.keys(dataRows).map(Number).filter(r => r > h.headerRow &&
+      String(dataRows[r][h.cols.place] || "").trim()).sort((a, b) => a - b);
+    if (!rowIdx.length) return;
+
+    const index = {};
+    dataRows && Object.keys(dataRows).forEach(r => {
+      const key = String(dataRows[r][h.cols.place] || "").trim();
+      if (key) index[key] = Number(r);
+    });
+
+    list.forEach((t, i) => {
+      const r = index[String(t.B || "").trim()] !== undefined ? index[String(t.B || "").trim()] : rowIdx[i];
+      if (r === undefined) return;
+      const put = (col, val) => {
+        if (col === undefined || col < 0) return;
+        const at = grid.cells.findIndex(x => x[0] === r && x[1] === col);
+        if (at >= 0) { if (val === "" ) grid.cells.splice(at, 1); else grid.cells[at][2] = val; }
+        else if (val !== "") grid.cells.push([r, col, typeof val === "number" ? val : String(val)]);
+      };
+      put(h.cols.place, t.B || "");
+      put(h.cols.point, t.C || "");
+      put(h.cols.dept, t.D || "");
+      put(h.cols.date, t.E || "");
+      put(h.cols.people, Number(t.F) || "");
+      put(h.cols.fare, t.T_manual === "" || t.T_manual === undefined ? "" : Number(t.T_manual));
+    });
+  }
+
   async function handleDocxFile(file) {
     const buf = await file.arrayBuffer();
     const wb = XLSX.read(buf);
@@ -893,12 +963,30 @@ if (typeof document !== "undefined") {
       .then(blob => downloadBlob(blob, `${title}.docx`));
     lastUploaded = teams;
     lastUploadedGrid = extractGrid(wb.Sheets[name]);
+    try {
+      localStorage.setItem("budgetGrid", JSON.stringify({ at: Date.now(), file: file.name, grid: lastUploadedGrid }));
+      localStorage.setItem("budgetGridTeams", JSON.stringify(teams));
+    } catch (e) { /* 超配额就只在内存里用 */ }
     if ($("budget-sync")) $("budget-sync").disabled = false;   // 上传后也可直接同步
     $("docx-info").textContent = `已按表内数值生成 Word（${teams.length} 支支队，表：${name}）；可点右侧按钮同步到金山`;
   }
 
   document.addEventListener("DOMContentLoaded", async () => {
     loadLocal(); renderEditor();
+    // 恢复上次上传的完整网格模板（刷新页面后仍能全列写入金山）
+    try {
+      const saved = localStorage.getItem("budgetGrid");
+      if (saved) {
+        const o = JSON.parse(saved);
+        if (o && o.grid && o.grid.cells && o.grid.cells.length) {
+          lastUploadedGrid = o.grid;
+          if ($("docx-info")) {
+            $("docx-info").textContent = "已载入上次上传的模板（" + (o.file || "预算表") +
+              "，同步时按全部列写入；如需更换请重新上传）";
+          }
+        }
+      }
+    } catch (e) {}
     $("tab-manual").addEventListener("click", () => {
       $("tab-manual").classList.add("active"); $("tab-upload").classList.remove("active");
       $("panel-manual").style.display = ""; $("panel-upload").style.display = "none";
