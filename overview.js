@@ -70,7 +70,7 @@
 
     var html = '';
     data.forEach(function (group, gi) {
-      var rows = group.rows || [];
+      var rows = (group.rows || []).filter(function (r) { return num(r.actual) || num(r.budget); });
       var b = sum(rows, 'budget'), a = sum(rows, 'actual');
       html += '<div style="margin-top:18px">' +
         '<h3 style="font-size:14px;margin:0 0 6px;color:var(--purple)">' + esc(group.sheet) +
@@ -79,10 +79,10 @@
         '<table class="ov"><thead><tr>' +
         '<th>支队</th><th>人数</th><th>预算额</th><th>决算金额</th><th>差额</th><th>差额率</th><th>备注</th>' +
         '</tr></thead><tbody>';
-      rows.forEach(function (r) {
+      rows.filter(function (r) { return num(r.actual) || num(r.budget); }).forEach(function (r) {
         var d = num(r.actual) - num(r.budget);
         html += '<tr>' +
-          '<td>' + esc(r.place) + (r.squad ? '　<span class="hint">' + esc(r.squad) + '</span>' : '') + '</td>' +
+          '<td>' + esc(r.place) + (r.squad ? '　<span class="hint">' + esc(r.squad) + (r.date ? ' ' + esc(r.date) : '') + '</span>' : '') + '</td>' +
           '<td>' + esc(r.people) + '</td>' +
           '<td>' + fmt(num(r.budget)) + '</td>' +
           '<td>' + fmt(num(r.actual)) + '</td>' +
