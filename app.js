@@ -651,14 +651,27 @@ if (typeof document !== "undefined") {
   }
 
   async function syncBudget() {
-    // 数据来源：上传过调整后的 xlsx 且抓到原始网格 → 原样复刻；否则用预览结果 → 精简 12 列
-    const useGrid = !!(lastUploadedGrid && lastUploadedGrid.cells && lastUploadedGrid.cells.length);
-    const base = useGrid ? lastUploaded : lastComputed;
-    if (!base || !base.length) {
-      alert("请先「生成预览」，或上传调整后的预算表后再同步");
+    // 数据来源：优先用完整网格（上传的 / 记住的 / 网页刚生成的 30 列模板）
+    const computed = lastComputed;
+    if (!computed || !computed.length) {
+      alert("请先点「生成预览」核对数据，再同步到金山");
       return;
     }
-    const computed = base;
+
+    let grid = (lastUploadedGrid && lastUploadedGrid.cells && lastUploadedGrid.cells.length)
+      ? lastUploadedGrid : null;
+    let gridSource = grid ? "已记住的模板" : "";
+    if (!grid) {
+      try {
+        const wb = buildWorkbook(computed);
+        const sh = wb.Sheets[wb.SheetNames[0]];
+        const g = extractGrid(sh);
+        if (g && g.cells.length) { grid = g; gridSource = "网页生成的完整模板"; }
+      } catch (e) { /* 生成失败则退回精简列 */ }
+    }
+    // 数据来自金山读回 → 把编辑器里的最新值再套回网格
+    if (grid && gridFromReadback) patchGridWithTeams(grid, teams);
+    const useGrid = !!grid;
     const btn = $("budget-sync"), info = $("budget-sync-info");
 
     // ① 确认是否为最终版
@@ -666,8 +679,8 @@ if (typeof document !== "undefined") {
     const okFinal = confirm(
       "即将写入金山预算表：\n\n" +
       "工作表：" + budgetSheetName() + "\n" +
-      "写入方式：" + (useGrid ? "原样复刻上传表（含颜色/列宽/合并）" : "精简 12 列（按预览结果）") + "\n" +
-      "支队数：" + (useGrid ? "全表" : computed.length + " 支") + "\n" +
+      "写入方式：" + (useGrid ? "完整 30 列（" + gridSource + "，含颜色/列宽/合并）" : "精简 12 列") + "\n" +
+      "支队数：" + computed.length + " 支\n" +
       "预算总额：" + fmtNum(totalAB) + " 元\n\n" +
       "确认这是最终版本？写入后可在金山继续查看。" +
       "若还要修改，建议先点「取消」，改完再同步。");
@@ -700,7 +713,7 @@ if (typeof document !== "undefined") {
     // 上传来源且拿到了原始网格 → 原样复刻（列宽/行高/合并/加粗都保留）
     if (useGrid) {
       try {
-        const g = lastUploadedGrid;
+        const g = grid;
         const r = await callBudget({
           action: "syncBudgetGrid",
           sheetName: sheetName,
@@ -777,6 +790,7 @@ if (typeof document !== "undefined") {
       }));
       renderEditor(); saveLocal(); invalidate();
       if (lastUploadedGrid) {
+        gridFromReadback = true;
         patchGridWithTeams(lastUploadedGrid, teams);
         info.textContent = `✅ 已读回「${name}」的 ${rows.length} 支支队；同步时将按你上传的完整列模板写入`;
       } else {
@@ -826,7 +840,8 @@ if (typeof document !== "undefined") {
   }
 
   let lastUploaded = null;       // 最近一次「上传调整后的 xlsx」解析出的支队数据
-  let lastUploadedGrid = null;   // 该表的原始网格（值/列宽/行高/合并/加粗），用于原样复刻
+  let lastUploadedGrid = null;   // 该表的原始网格（值/列宽/行高/合并/加粗/样式），用于原样复刻
+  let gridFromReadback = false;  // true = 编辑器的数据来自「金山读回」，同步前需要再套回网格
 
   /** 从工作表提取「原样复刻」所需的一切：值 + 列宽 + 行高 + 合并 + 样式桶 */
   function extractGrid(ws) {
@@ -963,6 +978,7 @@ if (typeof document !== "undefined") {
       .then(blob => downloadBlob(blob, `${title}.docx`));
     lastUploaded = teams;
     lastUploadedGrid = extractGrid(wb.Sheets[name]);
+    gridFromReadback = false;
     try {
       localStorage.setItem("budgetGrid", JSON.stringify({ at: Date.now(), file: file.name, grid: lastUploadedGrid }));
       localStorage.setItem("budgetGridTeams", JSON.stringify(teams));
