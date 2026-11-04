@@ -650,10 +650,12 @@ if (typeof document !== "undefined") {
     });
   }
 
-  async function syncBudget(fromUpload) {
-    const base = fromUpload ? lastUploaded : lastComputed;
+  async function syncBudget() {
+    // 数据来源：上传过调整后的 xlsx 且抓到原始网格 → 原样复刻；否则用预览结果 → 精简 12 列
+    const useGrid = !!(lastUploadedGrid && lastUploadedGrid.cells && lastUploadedGrid.cells.length);
+    const base = useGrid ? lastUploaded : lastComputed;
     if (!base || !base.length) {
-      alert(fromUpload ? "请先上传调整后的预算表" : "请先点击「生成预览」核对数据");
+      alert("请先「生成预览」，或上传调整后的预算表后再同步");
       return;
     }
     const computed = base;
@@ -664,7 +666,8 @@ if (typeof document !== "undefined") {
     const okFinal = confirm(
       "即将写入金山预算表：\n\n" +
       "工作表：" + budgetSheetName() + "\n" +
-      "支队数：" + computed.length + " 支\n" +
+      "写入方式：" + (useGrid ? "原样复刻上传表（含颜色/列宽/合并）" : "精简 12 列（按预览结果）") + "\n" +
+      "支队数：" + (useGrid ? "全表" : computed.length + " 支") + "\n" +
       "预算总额：" + fmtNum(totalAB) + " 元\n\n" +
       "确认这是最终版本？写入后可在金山继续查看。" +
       "若还要修改，建议先点「取消」，改完再同步。");
@@ -695,7 +698,7 @@ if (typeof document !== "undefined") {
     info.textContent = "正在写入金山…";
 
     // 上传来源且拿到了原始网格 → 原样复刻（列宽/行高/合并/加粗都保留）
-    if (fromUpload && lastUploadedGrid) {
+    if (useGrid) {
       try {
         const g = lastUploadedGrid;
         const r = await callBudget({
@@ -712,7 +715,7 @@ if (typeof document !== "undefined") {
         btn.disabled = false;
       }
     }
-    const rows = fromUpload ? uploadedRows(computed) : computed.map((t, i) => [
+    const rows = computed.map((t, i) => [
       i + 1, t.B, t.C || "", t.D || "", t.E || "", t.people,
       fmtNum(t.T), fmtNum(t.U), fmtNum(t.Y), fmtNum(t.AA), fmtNum(t.AB), t.S || ""
     ]);
@@ -890,7 +893,7 @@ if (typeof document !== "undefined") {
       .then(blob => downloadBlob(blob, `${title}.docx`));
     lastUploaded = teams;
     lastUploadedGrid = extractGrid(wb.Sheets[name]);
-    if ($("upload-sync")) $("upload-sync").disabled = false;
+    if ($("budget-sync")) $("budget-sync").disabled = false;   // 上传后也可直接同步
     $("docx-info").textContent = `已按表内数值生成 Word（${teams.length} 支支队，表：${name}）；可点右侧按钮同步到金山`;
   }
 
@@ -914,7 +917,6 @@ if (typeof document !== "undefined") {
     if ($("budget-sync")) $("budget-sync").addEventListener("click", syncBudget);
     if ($("budget-load-refresh")) $("budget-load-refresh").addEventListener("click", refreshBudgetList);
     if ($("budget-load")) $("budget-load").addEventListener("click", loadBudgetFromSheet);
-    if ($("upload-sync")) $("upload-sync").addEventListener("click", () => syncBudget(true));
     $("drop").addEventListener("click", () => $("file").click());
     $("drop").addEventListener("dragover", e => { e.preventDefault(); $("drop").classList.add("hover"); });
     $("drop").addEventListener("dragleave", () => $("drop").classList.remove("hover"));
