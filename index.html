@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>实践支队预算表生成器 · 清华就协实践部</title>
+<title>实践部经费助手 · 清华就协实践部</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js"></script>
@@ -19,6 +19,13 @@
   .card { background: #fff; border: 1px solid #e5e5e5; border-radius: 10px;
           padding: 20px 24px; margin-bottom: 20px; }
   .card h2 { margin: 0 0 12px; font-size: 16px; color: var(--purple); }
+  .main-tabs { display: flex; gap: 10px; flex-wrap: wrap; margin: 0 0 20px;
+               background: #fff; border: 1px solid #e5e5e5; border-radius: 12px; padding: 10px 12px; }
+  .main-tabs button { border: 1px solid transparent; background: #f6f0fa; color: var(--purple);
+                      padding: 10px 22px; border-radius: 9px; cursor: pointer; font-size: 15px; font-weight: 500; }
+  .main-tabs button:hover { background: var(--purple-light); }
+  .main-tabs button.active { background: var(--purple); color: #fff; }
+  [hidden] { display: none !important; }
   .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
   .tabs button { border: 1px solid var(--purple); background: #fff; color: var(--purple);
                  padding: 6px 18px; border-radius: 6px; cursor: pointer; font-size: 14px; }
@@ -57,10 +64,17 @@
 </head>
 <body>
 <header>
-  <h1>实践支队预算表生成器</h1>
-  <p>清华大学学生就业服务协会 · 实践部 ｜ 填好支队信息 → 一键生成完整预算表（含 12306 二等座最高票价）→ 下载 Excel ｜ 决算表上传 → 自动在金山文档新建打款院系工作表 ｜ <a href="map.html" style="color:#fff;text-decoration:underline">🗺️ 实践地图</a></p>
+  <h1>实践部经费助手</h1>
+  <p>清华大学学生就业服务协会 · 实践部 ｜ 预算编制 · 决算打款 · 拨付说明 ｜ <a href="map.html" style="color:#fff;text-decoration:underline">🗺️ 实践地图</a></p>
 </header>
 <main>
+  <div class="main-tabs" role="tablist">
+    <button data-view="budget" class="active" role="tab">📋 预算编制</button>
+    <button data-view="payout" role="tab">🧾 决算与打款</button>
+    <button data-view="note" role="tab">📄 拨付说明</button>
+  </div>
+
+  <div id="view-budget">
   <div class="card">
     <h2>第一步 · 录入支队信息</h2>
     <div class="tabs">
@@ -117,6 +131,9 @@
     <button class="btn secondary" id="upload-docx">上传调整后的 xlsx → 生成 Word</button>
     <span class="hint" id="docx-info" style="margin-left:8px"></span>
   </div>
+  </div><!-- /view-budget -->
+
+  <div id="view-payout" hidden>
   <div class="card">
     <h2>决算 → 打款院系表（报销决算表上传）</h2>
     <p class="hint">收到新的实践<b>决算表</b>（.docx）后上传，自动提取「院系联合组织」支队（剔除“就协全部”），
@@ -141,6 +158,9 @@
     </div>
   </div>
 
+  </div><!-- /view-payout -->
+
+  <div id="view-note" hidden>
   <div class="card">
     <h2>打款院系表 → 拨付说明（Word 下载 + 金山同步）</h2>
     <p class="hint">在打款汇总表格里<b>补全院系/负责人/工作证号/项目编号</b>后，点「生成拨付说明」：
@@ -157,9 +177,33 @@
     <button class="btn" id="note-gen">📄 生成拨付说明</button>
     <div id="note-status" style="font-size:13px;line-height:1.7;white-space:pre-wrap;margin-top:10px"></div>
   </div>
+  </div><!-- /view-note -->
 </main>
 <footer>数据不出浏览器：所有计算与文件生成均在本地完成 ｜ 票价库由实践部每期预算前刷新</footer>
 <datalist id="city-list"></datalist>
+<script>
+(function () {
+  var btns = Array.prototype.slice.call(document.querySelectorAll('.main-tabs button'));
+  var views = { budget: 'view-budget', payout: 'view-payout', note: 'view-note' };
+  function show(v) {
+    if (!views[v]) v = 'budget';
+    Object.keys(views).forEach(function (k) {
+      var el = document.getElementById(views[k]);
+      if (el) el.hidden = (k !== v);
+    });
+    btns.forEach(function (b) {
+      b.classList.toggle('active', b.getAttribute('data-view') === v);
+    });
+    try { localStorage.setItem('sj_view', v); } catch (e) {}
+  }
+  btns.forEach(function (b) {
+    b.addEventListener('click', function () { show(b.getAttribute('data-view')); });
+  });
+  var last = null;
+  try { last = localStorage.getItem('sj_view'); } catch (e) {}
+  show(last || 'budget');
+})();
+</script>
 <script src="app.js"></script>
 <script src="payout.js"></script>
 <script src="note.js"></script>
