@@ -3,11 +3,12 @@ name: 刷新12306票价库
 on:
   schedule:
     - cron: '0 1 * * 1'        # 每周一 09:00（北京时间）自动刷新（无人维护时票价也不过期）
-  workflow_dispatch:            # 也可在 Actions 页面手动点 "Run workflow"（每期正式预算前建议点一次）
-  push:                         # 你有上传/改动时顺带刷新
-    paths-ignore:
-      - 'fares.json'            # 机器人自己提交票价不触发，防循环
-      - 'station_codes.json'
+  workflow_dispatch:            # 需要时在 Actions 页面手动点 "Run workflow"
+# 注意：不再用 push 触发——每次推送都跑一次会和 Pages 构建抢队列
+
+concurrency:
+  group: refresh-fares
+  cancel-in-progress: true
 
 permissions:
   contents: write
