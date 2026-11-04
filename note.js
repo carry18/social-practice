@@ -118,6 +118,7 @@
       return new D.TableCell({
         width: { size: COLW[opts.col || 0], type: D.WidthType.DXA },
         columnSpan: opts.span,
+        verticalMerge: opts.vMerge,
         verticalAlign: D.VerticalAlign.CENTER,
         children: [new D.Paragraph({
           alignment: D.AlignmentType.CENTER,
@@ -128,13 +129,27 @@
     };
 
     var HEADERS = ['编号', '地点', '打款院系', '打款金额', '项目负责人', '工作证号', '项目名称', '项目编号'];
-    var mkRow = function (cells) {
-      return new D.TableRow({ height: { value: 567, rule: D.HeightRule.EXACT }, children: cells }); // 样例行高 567 缇
+    var mkRow = function (cells, isHeader) {
+      return new D.TableRow({
+        height: { value: 567, rule: D.HeightRule.EXACT }, // 样例行高 567 缇
+        tableHeader: !!isHeader,                         // 跨页时自动重复表头
+        children: cells
+      });
     };
-    var rows = [mkRow(HEADERS.map(function (h, i) { return cell(h, { col: i }); }))];
-    rows[0].tableHeader = true;
-    tableRows.forEach(function (r) {
-      rows.push(mkRow(r.map(function (v, i) { return cell(v, { col: i }); })));
+    var rows = [mkRow(HEADERS.map(function (h, i) { return cell(h, { col: i }); }), true)];
+    tableRows.forEach(function (r, idx) {
+      var isCont = !!r[8];
+      var nextCont = idx + 1 < tableRows.length && !!tableRows[idx + 1][8];
+      var cells = [];
+      for (var i = 0; i < 8; i++) {
+        var vMerge = null;
+        if (i === 0 || i === 1) {                    // 编号、地点两列支持纵向合并
+          if (isCont) vMerge = D.VerticalMergeType.CONTINUE;
+          else if (nextCont) vMerge = D.VerticalMergeType.RESTART;
+        }
+        cells.push(cell(isCont && (i === 0 || i === 1) ? '' : r[i], { col: i, vMerge: vMerge }));
+      }
+      rows.push(mkRow(cells));
     });
     // 总计行：前 3 列合并「总计」+ 金额 + 后 4 列合并空白
     rows.push(mkRow([
@@ -216,7 +231,7 @@
 
       // 拼装文案
       var yt = parseYearTerm(sheet);
-      var n = rowsData.length;
+      var n = rowsData.filter(function (r) { return !r.cont; }).length;
       meta = {
         title1: '关于' + yt.y + '年' + yt.tFull + '“清华学子地域行”实践',
         title2: topic + '经费拨付事宜的说明',
@@ -226,14 +241,17 @@
         attach: '附件：' + yt.y + '年' + yt.tFull + '社会实践专项经费拨付明细表（含项目名称、承办院系、金额及账户信息）。'
       };
 
-      // 明细行：编号/地点/院系/金额/负责人/证号/项目名/项目编号
-      var total = 0;
-      tableRows = rowsData.map(function (r, i) {
+      // 明细行：编号/地点/院系/金额/负责人/证号/项目名/项目编号 + 合并标记
+      // 同一支队拆成多个院系行时，cont=true 的行不重复编号，Word 里合并编号/地点单元格
+      var total = 0, squadNo = 0, squads = 0;
+      tableRows = rowsData.map(function (r) {
         var amt = parseFloat(String(r.amount).replace(/[^\d.\-]/g, '')) || 0;
         total += amt;
-        return [i + 1, r.place || '', r.dept, fmtAmount(amt), r.leader, r.cert, r.proj, r.projId];
+        if (!r.cont) { squadNo += 1; squads += 1; }
+        return [squadNo, r.place || '', r.dept, fmtAmount(amt), r.leader, r.cert, r.proj, r.projId, !!r.cont];
       });
       totalStr = fmtAmount(total);
+      meta.body = meta.body.replace(/\d+\s*支专项实践支队/, squads + '支专项实践支队');
 
       setStatus('⏳ 第 2/3 步：正在生成 Word（共 ' + n + ' 行明细，总计 ' + totalStr + ' 元）…');
       var doc = buildDocx(meta, tableRows, totalStr);
