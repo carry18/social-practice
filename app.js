@@ -626,10 +626,54 @@ if (typeof document !== "undefined") {
     return (t.replace(/预算$/, "") || "本期") + "预算";
   }
 
+  async function callBudget(argv) {
+    const resp = await fetch(SYNC_HOOK, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ target: "budget", Context: { argv: argv } })
+    });
+    const d = await resp.json();
+    if (d.error) throw new Error(d.error);
+    return d.data && d.data.result;
+  }
+
   async function syncBudget() {
     const computed = lastComputed;
     if (!computed) { alert("请先点击「生成预览」核对数据"); return; }
     const btn = $("budget-sync"), info = $("budget-sync-info");
+
+    // ① 确认是否为最终版
+    const totalAB = computed.reduce((a, t) => a + t.AB, 0);
+    const okFinal = confirm(
+      "即将写入金山预算表：\n\n" +
+      "工作表：" + budgetSheetName() + "\n" +
+      "支队数：" + computed.length + " 支\n" +
+      "预算总额：" + fmtNum(totalAB) + " 元\n\n" +
+      "确认这是最终版本？写入后可在金山继续查看。" +
+      "若还要修改，建议先点「取消」，改完再同步。");
+    if (!okFinal) return;
+
+    // ② 同名表已存在 → 询问覆盖还是另存新版本
+    let sheetName = budgetSheetName();
+    try {
+      const names = await callBudget({ action: "list" });
+      if (Array.isArray(names) && names.indexOf(sheetName) >= 0) {
+        const overwrite = confirm(
+          "金山里已经有工作表「" + sheetName + "」。\n\n" +
+          "点「确定」= 覆盖它（旧内容会被清空，不可恢复）\n" +
+          "点「取消」= 另存为新版本（保留旧版）");
+        if (!overwrite) {
+          const d = new Date(), pad = n => String(n).padStart(2, "0");
+          const suggested = sheetName + " V" + `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
+          const input = prompt("新工作表名称：", suggested);
+          if (!input) return;
+          sheetName = input.trim();
+        }
+      }
+    } catch (e) {
+      if (!confirm("⚠ 无法确认是否已有同名工作表（" + e.message + "）。继续写入可能覆盖旧表，是否继续？")) return;
+    }
+
     btn.disabled = true;
     info.textContent = "正在写入金山…";
     const rows = computed.map((t, i) => [
@@ -638,30 +682,64 @@ if (typeof document !== "undefined") {
     ]);
     const sumBy = k => computed.reduce((a, t) => a + t[k], 0);
     try {
-      const resp = await fetch(SYNC_HOOK, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          target: "budget",
-          Context: { argv: {
-            action: "syncBudget",
-            sheetName: budgetSheetName(),
-            title: ($("doc-title").value || "实践预算") + "表",
-            rows: rows,
-            total_G: fmtNum(sumBy("T")), total_H: fmtNum(sumBy("U")),
-            total_I: fmtNum(sumBy("Y")), total_J: fmtNum(sumBy("AA")),
-            total: fmtNum(sumBy("AB"))
-          } }
-        })
+      const r = await callBudget({
+        action: "syncBudget",
+        sheetName: sheetName,
+        title: ($("doc-title").value || "实践预算") + "表",
+        rows: rows,
+        total_G: fmtNum(sumBy("T")), total_H: fmtNum(sumBy("U")),
+        total_I: fmtNum(sumBy("Y")), total_J: fmtNum(sumBy("AA")),
+        total: fmtNum(sumBy("AB"))
       });
-      const d = await resp.json();
-      if (d.error) throw new Error(d.error);
-      const r = d.data && d.data.result;
-      info.textContent = `✅ 已写入金山工作表「${r && r.sheet ? r.sheet : budgetSheetName()}」（${computed.length} 支队）`;
+      info.textContent = `✅ 已写入金山工作表「${r && r.sheet ? r.sheet : sheetName}」（${computed.length} 支队，合计 ${fmtNum(totalAB)} 元）`;
     } catch (e) {
       info.textContent = "❌ 同步失败：" + e.message + "（请确认云函数已配 KDOCS_WEBHOOK_BUDGET）";
     } finally {
       btn.disabled = false;
+    }
+  }
+
+  /* ---------- 从金山读回预算（金山改完 → 网页继续改） ---------- */
+  async function refreshBudgetList() {
+    const sel = $("budget-load-sheet"), info = $("budget-load-info");
+    if (!sel) return;
+    sel.innerHTML = "";
+    info.textContent = "读取中…";
+    try {
+      const names = await callBudget({ action: "list" });
+      (names || []).forEach(n => {
+        const op = document.createElement("option");
+        op.value = n; op.textContent = n; sel.appendChild(op);
+      });
+      // 默认选名字里含「预算」的最后一个
+      const hits = (names || []).filter(n => /预算/.test(n));
+      if (hits.length) sel.value = hits[hits.length - 1];
+      info.textContent = (names || []).length ? `共 ${(names || []).length} 个工作表` : "金山里还没有工作表";
+    } catch (e) {
+      info.textContent = "读取失败：" + e.message + "（请确认云函数已配 KDOCS_WEBHOOK_BUDGET）";
+    }
+  }
+
+  async function loadBudgetFromSheet() {
+    const sel = $("budget-load-sheet"), info = $("budget-load-info");
+    const name = sel && sel.value;
+    if (!name) { alert("请先选一个金山工作表（可点「刷新列表」）"); return; }
+    if (lastComputed && !confirm("读回会覆盖当前编辑表格里的内容，继续吗？")) return;
+    info.textContent = "读取中…";
+    try {
+      const res = await callBudget({ action: "readBudget", sheet: name });
+      const rows = (res && res.rows) || [];
+      if (!rows.length) throw new Error("这个工作表里没有读到支队数据");
+      teams = rows.map(r => ({
+        B: r.B || "", C: r.C || "", D: r.D || "就协", E: r.E || "",
+        F: Number(r.F) || 12,
+        T_manual: Number(r.T_manual) > 0 ? Number(r.T_manual) : "",
+        H: ""
+      }));
+      renderEditor(); saveLocal(); invalidate();
+      info.textContent = `✅ 已读回「${name}」的 ${rows.length} 支支队，可直接修改后重新预览`;
+    } catch (e) {
+      info.textContent = "读取失败：" + e.message;
     }
   }
 
@@ -734,6 +812,8 @@ if (typeof document !== "undefined") {
     $("generate").addEventListener("click", () => generate("xlsx"));
     $("generate-docx").addEventListener("click", () => generate("docx"));
     if ($("budget-sync")) $("budget-sync").addEventListener("click", syncBudget);
+    if ($("budget-load-refresh")) $("budget-load-refresh").addEventListener("click", refreshBudgetList);
+    if ($("budget-load")) $("budget-load").addEventListener("click", loadBudgetFromSheet);
     $("drop").addEventListener("click", () => $("file").click());
     $("drop").addEventListener("dragover", e => { e.preventDefault(); $("drop").classList.add("hover"); });
     $("drop").addEventListener("dragleave", () => $("drop").classList.remove("hover"));

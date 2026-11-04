@@ -182,6 +182,13 @@
     <input type="file" id="file-docx" accept=".xlsx,.xls" style="display:none">
     <button class="btn secondary" id="upload-docx">上传调整后的 xlsx → 生成 Word</button>
     <span class="hint" id="docx-info" style="margin-left:8px"></span>
+
+    <hr style="border:none;border-top:1px dashed #e0d4ea;margin:16px 0">
+    <p class="hint"><b>在金山里改过预算表，想接着在网页上改？</b>选一个金山工作表，点「读回」把数据填进上方编辑表格：</p>
+    <select id="budget-load-sheet" style="width:260px;padding:4px 6px;font-size:13px"></select>
+    <button class="btn secondary" id="budget-load-refresh" type="button" style="margin-left:8px">🔄 刷新列表</button>
+    <button class="btn secondary" id="budget-load" type="button" style="margin-left:8px">📥 从金山读回</button>
+    <span class="hint" id="budget-load-info" style="margin-left:8px"></span>
   </div>
 
   <div class="card">
