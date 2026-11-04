@@ -18,11 +18,12 @@
 
   /* ================= 代理调用 ================= */
   function callKdocs(argv, opts) {
-    var url = (opts && opts.note) ? (DEFAULT_HOOK + '?target=note') : DEFAULT_HOOK;
-    return fetch(url, {
+    var payload = { Context: { argv: argv } };
+    if (opts && opts.note) payload.target = 'note';   // 由代理路由到「拨付说明」文件的脚本
+    return fetch(DEFAULT_HOOK, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ Context: { argv: argv } })
+      body: JSON.stringify(payload)
     }).then(function (resp) {
       return resp.json().then(function (data) { return { ok: resp.ok, data: data }; });
     }).then(function (r) {
