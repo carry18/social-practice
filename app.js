@@ -693,6 +693,25 @@ if (typeof document !== "undefined") {
 
     btn.disabled = true;
     info.textContent = "正在写入金山…";
+
+    // 上传来源且拿到了原始网格 → 原样复刻（列宽/行高/合并/加粗都保留）
+    if (fromUpload && lastUploadedGrid) {
+      try {
+        const g = lastUploadedGrid;
+        const r = await callBudget({
+          action: "syncBudgetGrid",
+          sheetName: sheetName,
+          cols: g.cols, rows: g.rows, merges: g.merges, bolds: g.bolds,
+          cells: g.cells, ncols: g.ncols
+        });
+        info.textContent = `✅ 已原样写入金山工作表「${r && r.sheet ? r.sheet : sheetName}」（${r.rows} 行 × ${r.cols} 列，含列宽/行高/合并）`;
+        return;
+      } catch (e) {
+        info.textContent = "原样写入失败，改用精简格式…（" + e.message + "）";
+      } finally {
+        btn.disabled = false;
+      }
+    }
     const rows = fromUpload ? uploadedRows(computed) : computed.map((t, i) => [
       i + 1, t.B, t.C || "", t.D || "", t.E || "", t.people,
       fmtNum(t.T), fmtNum(t.U), fmtNum(t.Y), fmtNum(t.AA), fmtNum(t.AB), t.S || ""
@@ -798,7 +817,28 @@ if (typeof document !== "undefined") {
     $("tab-manual").click();
   }
 
-  let lastUploaded = null;   // 最近一次「上传调整后的 xlsx」解析出的支队数据
+  let lastUploaded = null;       // 最近一次「上传调整后的 xlsx」解析出的支队数据
+  let lastUploadedGrid = null;   // 该表的原始网格（值/列宽/行高/合并/加粗），用于原样复刻
+
+  /** 从工作表提取「原样复刻」所需的一切 */
+  function extractGrid(ws) {
+    if (!ws || !ws["!ref"]) return null;
+    const range = XLSX.utils.decode_range(ws["!ref"]);
+    const cells = [], bolds = [];
+    for (let r = range.s.r; r <= range.e.r; r++) {
+      for (let c = range.s.c; c <= range.e.c; c++) {
+        const addr = XLSX.utils.encode_cell({ r, c });
+        const cell = ws[addr];
+        if (!cell || cell.v === undefined || cell.v === "") continue;
+        cells.push([r, c, typeof cell.v === "number" ? cell.v : String(cell.v)]);
+        if (cell.s && cell.s.font && cell.s.font.bold) bolds.push([r, c]);
+      }
+    }
+    const cols = (ws["!cols"] || []).map(x => (x && (x.wch || x.width)) || 0);
+    const rows = (ws["!rows"] || []).map(x => (x && x.hpt) || 0);
+    const merges = (ws["!merges"] || []).map(m => [m.s.r, m.s.c, m.e.r, m.e.c]);
+    return { cells, bolds, cols, rows, merges, ncols: Math.min(range.e.c + 1, 60) };
+  }
 
   async function handleDocxFile(file) {
     const buf = await file.arrayBuffer();
@@ -811,6 +851,7 @@ if (typeof document !== "undefined") {
     docx.Packer.toBlob(buildDocx(teams, title, season))
       .then(blob => downloadBlob(blob, `${title}.docx`));
     lastUploaded = teams;
+    lastUploadedGrid = extractGrid(wb.Sheets[name]);
     if ($("upload-sync")) $("upload-sync").disabled = false;
     $("docx-info").textContent = `已按表内数值生成 Word（${teams.length} 支支队，表：${name}）；可点右侧按钮同步到金山`;
   }
