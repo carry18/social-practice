@@ -223,8 +223,46 @@
     callKdocs({ action: 'export', sheet: sheet }).then(function (res) {
       rowsData = res.rows || [];
       if (!rowsData.length) throw new Error('表里读不到数据行');
-      if (res.incomplete && res.incomplete.length) {
-        var go = window.confirm('⚠️ 第 ' + res.incomplete.join('、') + ' 行的院系/负责人/工作证号/项目编号还没填全，' +
+
+      // ① 识别「自己报销」类行（负责人/项目名称里注明院系自行报销的，不进入拨付清单）
+      var SELFPAY_RE = /自己报销|自行报销|自付|不拨付|自行处理/;
+      var isSelfPay = function (r) {
+        return SELFPAY_RE.test(String(r.leader || '') + String(r.proj || ''));
+      };
+      var sumOf = function (list) {
+        return list.reduce(function (t, r) {
+          return t + (parseFloat(String(r.amount).replace(/[^\d.\-]/g, '')) || 0);
+        }, 0);
+      };
+      var selfPaid = rowsData.filter(isSelfPay);
+      var tableTotalAll = sumOf(rowsData);
+      var pool = rowsData;
+      if (selfPaid.length) {
+        var exAmt = sumOf(selfPaid);
+        var exList = selfPaid.map(function (r) {
+          return '· ' + (r.place || '') + ' / ' + (r.dept || '') + '：' + fmtAmount(parseFloat(String(r.amount).replace(/[^\d.\-]/g, '')) || 0) + ' 元';
+        }).join('\n');
+        var keep = window.confirm('检测到 ' + selfPaid.length + ' 行由院系「自己报销」，不应计入拨付清单：\n\n' + exList +
+          '\n\n剔除后说明总计 = ' + fmtAmount(tableTotalAll - exAmt) + ' 元' +
+          '（打款表总金额 ' + fmtAmount(tableTotalAll) + ' 元，差额 ' + fmtAmount(exAmt) + ' 元即自己报销部分）。' +
+          '\n\n点「确定」剔除这些行；点「取消」全部保留（会出现空白行）。');
+        if (keep) pool = rowsData.filter(function (r) { return !isSelfPay(r); });
+      }
+      // 剔除后重算续行标记：同一支队的第一行 cont=false，其余 cont=true
+      var lastSquad = null;
+      pool.forEach(function (r) {
+        r.cont = (r.squad === lastSquad);
+        lastSquad = r.squad;
+      });
+      rowsData = pool;
+
+      // ② 缺项检查（已剔除的行不再提示）
+      var miss = [];
+      rowsData.forEach(function (r, i) {
+        if (!r.dept || !r.leader || !r.cert || !r.projId) miss.push(i + 1);
+      });
+      if (miss.length) {
+        var go = window.confirm('⚠️ 第 ' + miss.join('、') + ' 行的院系/负责人/工作证号/项目编号还没填全，' +
           '生成的说明会有空白。\n\n点「确定」继续生成（之后可重新生成覆盖），点「取消」先去金山补全。');
         if (!go) throw new Error('__cancel__');
       }
@@ -243,10 +281,9 @@
 
       // 明细行：编号/地点/院系/金额/负责人/证号/项目名/项目编号 + 合并标记
       // 同一支队拆成多个院系行时，cont=true 的行不重复编号，Word 里合并编号/地点单元格
-      var total = 0, squadNo = 0, squads = 0;
+      var total = sumOf(rowsData), squadNo = 0, squads = 0;
       tableRows = rowsData.map(function (r) {
         var amt = parseFloat(String(r.amount).replace(/[^\d.\-]/g, '')) || 0;
-        total += amt;
         if (!r.cont) { squadNo += 1; squads += 1; }
         return [squadNo, r.place || '', r.dept, fmtAmount(amt), r.leader, r.cert, r.proj, r.projId, !!r.cont];
       });
