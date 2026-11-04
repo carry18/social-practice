@@ -35,18 +35,25 @@
     var btn = $('note-refresh');
     btn.disabled = true;
     callKdocs({ action: 'list' }).then(function (names) {
-      var dl = $('note-sheet-list');
-      dl.innerHTML = '';
+      var sel = $('note-sheet');
+      var prev = sel.value;
+      sel.innerHTML = '';
       (names || []).forEach(function (n) {
         var op = document.createElement('option');
-        op.value = n; dl.appendChild(op);
+        op.value = n; op.textContent = n; sel.appendChild(op);
       });
-      // 输入框为空时自动选中最后一个「打款表」
-      if (!$('note-sheet').value.trim()) {
-        var hits = (names || []).filter(function (n) { return /打款/.test(n); });
-        if (hits.length) $('note-sheet').value = hits[hits.length - 1];
+      if (!(names || []).length) {
+        var op0 = document.createElement('option');
+        op0.value = ''; op0.textContent = '（未读到工作表，请点刷新）'; sel.appendChild(op0);
       }
-      setStatus('✅ 工作表列表已刷新（共 ' + (names || []).length + ' 个）', '#1a7f37');
+      // 优先保留原选择；否则自动选中最后一个「打款表」
+      if (prev && (names || []).indexOf(prev) >= 0) {
+        sel.value = prev;
+      } else {
+        var hits = (names || []).filter(function (n) { return /打款/.test(n); });
+        if (hits.length) sel.value = hits[hits.length - 1];
+      }
+      setStatus('✅ 工作表列表已刷新（共 ' + (names || []).length + ' 个，可在下拉框中切换）', '#1a7f37');
     }).catch(function (e) {
       setStatus('❌ 获取工作表列表失败：' + e.message, '#b3261e');
     }).finally(function () { btn.disabled = false; });
@@ -183,12 +190,12 @@
   /* ================= 主流程 ================= */
   function generate() {
     var sheet = $('note-sheet').value.trim();
-    if (!sheet) { // 未填时尝试沿用上一张卡片的打款表名
+    if (!sheet) { // 未选时尝试沿用上一张卡片的打款表名
       var pt = $('payout-title');
-      if (pt && pt.value.trim()) { sheet = pt.value.trim(); $('note-sheet').value = sheet; }
+      if (pt && pt.value.trim()) sheet = pt.value.trim();
     }
     var topic = $('note-topic').value.trim() || '企业主题实践专项';
-    if (!sheet) { alert('请先填写「打款工作表」名称（可点刷新列表后选择）'); return; }
+    if (!sheet) { alert('请先在「打款工作表」下拉框选择一个工作表（可点刷新列表）'); return; }
 
     var btn = $('note-gen');
     btn.disabled = true;
