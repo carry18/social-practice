@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '0 1 * * 1'        # 每周一 09:00（北京时间）自动刷新（无人维护时票价也不过期）
   workflow_dispatch:            # 需要时在 Actions 页面手动点 "Run workflow"
+    inputs:
+      force:
+        description: '强制执行（忽略"今天已刷新过"的判断）'
+        type: boolean
+        default: false
 # 注意：不再用 push 触发——每次推送都跑一次会和 Pages 构建抢队列
 
 concurrency:
@@ -18,17 +23,46 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 50          # 需要历史来查 fares.json 上次提交日期
+
+      # ① 当天已刷新过 → 直接跳过（除非手动勾选了 force）
+      - name: 判断今天是否已刷新
+        id: guard
+        run: |
+          set -e
+          today=$(TZ=Asia/Shanghai date +%F)
+          last=$(TZ=Asia/Shanghai git log -1 --date=short --format=%cd -- fares.json || echo "none")
+          echo "上次刷新：$last ｜ 今天：$today ｜ 强制：${{ inputs.force }}"
+          if [ "$last" = "$today" ] && [ "${{ inputs.force }}" != "true" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "✅ 今天已经刷新过，跳过本次刷新。"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/setup-python@v5
+        if: steps.guard.outputs.skip != 'true'
         with:
           python-version: '3.12'
-      - run: pip install requests
+
+      - name: 安装依赖
+        if: steps.guard.outputs.skip != 'true'
+        run: pip install requests
+
       - name: 联网刷新票价（14天窗口二等座最高价）
+        if: steps.guard.outputs.skip != 'true'
         run: python3 fare_query.py --update fares.json --days 14
-      - name: 提交更新
+
+      - name: 有变化则提交
+        if: steps.guard.outputs.skip != 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add fares.json station_codes.json
-          git diff --cached --quiet && echo "票价无变化" && exit 0
-          git commit -m "chore: 自动刷新12306票价 ($(date +%F))"
+          if git diff --cached --quiet; then
+            echo "票价无变化，不提交"
+            exit 0
+          fi
+          git commit -m "chore: 自动刷新12306票价 ($(TZ=Asia/Shanghai date +%F))"
           git push
