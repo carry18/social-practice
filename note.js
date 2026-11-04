@@ -301,8 +301,9 @@
         action: 'syncNote',
         name: yt.y + yt.tShort + '拨付说明',
         fileName: yt.y + yt.tShort + '拨付说明',
-        sheetName: '拨付说明',
+        sheetName: yt.y + yt.tShort + '拨付说明',
         separate: true,
+        cleanup: true,
         note: {
           title1: meta.title1, title2: meta.title2, body: meta.body, attach: meta.attach,
           rows: tableRows, total: totalStr
@@ -311,7 +312,8 @@
     }).then(function (res) {
       var where;
       if (res && res.mode === 'separate') {
-        where = '② 金山云文档已更新独立文件「' + esc(res.fileName) + '」（工作表：' + esc(res.sheet) + '）';
+        where = '② 金山云文档已更新独立文件「' + esc(res.fileName) + '」（工作表：' + esc(res.sheet) + '）' +
+          (res.removed && res.removed.length ? '\n   已清理打款表工作簿里的旧说明表：' + esc(res.removed.join('、')) : '');
       } else {
         where = '② 金山工作簿已写入工作表「' + esc(String((res && res.sheet) || res)) + '」' +
           (res && res.fallbackReason ? '\n   ⚠️ 独立文档写入失败，已退回本工作簿（原因：' + esc(res.fallbackReason) + '）' : '');
