@@ -89,7 +89,8 @@
   /* ================= docx 生成 ================= */
   function buildDocx(meta, tableRows, totalStr) {
     var D = window.docx;
-    var FANGSONG = { ascii: '仿宋_GB2312', hAnsi: '仿宋_GB2312', eastAsia: '仿宋_GB2312' };
+    var FANGSONG = { ascii: '仿宋', hAnsi: '仿宋', eastAsia: '仿宋' };       // 正文 仿宋（与样例一致）
+    var CELLFONT = { ascii: '仿宋_GB2312', hAnsi: '仿宋_GB2312', eastAsia: '仿宋_GB2312' }; // 表格 仿宋_GB2312
     var TITLEFONT = { ascii: '方正小标宋_GBK', hAnsi: '方正小标宋_GBK', eastAsia: '方正小标宋_GBK' };
 
     var titlePara = function (text) {
@@ -102,14 +103,15 @@
     var bodyPara = function (text, indent) {
       return new D.Paragraph({
         alignment: D.AlignmentType.JUSTIFIED,
-        spacing: { line: 302, lineRule: D.LineRuleType.AUTO },
-        indent: indent ? { firstLine: 640 } : undefined, // 首行缩进 2 字符（16pt×2）
-        children: [new D.TextRun({ text: text, font: FANGSONG, size: 32 })]
+        spacing: { before: 91, line: 303, lineRule: D.LineRuleType.AUTO }, // 样例：段前91缇/行距303
+        indent: indent ? { firstLine: 550 } : undefined, // 首行缩进 2 字符（样例 550 缇）
+        children: [new D.TextRun({ text: text, font: FANGSONG, size: 28, characterSpacing: -5 })] // 14pt
       });
     };
 
     // 明细表：列宽 dxa（1cm≈567）——与样例一致
-    var COLW = [743, 1383, 1225, 669, 748, 811, 2359, 1128];
+    // 列宽：证号/金额两列较样例加宽，保证 10 位证号与带小数的金额不折行
+    var COLW = [743, 1383, 1225, 880, 748, 950, 2009, 1128];
     var border = { style: D.BorderStyle.SINGLE, size: 2, color: '000000' };
     var cell = function (text, opts) {
       opts = opts || {};
@@ -120,7 +122,7 @@
         children: [new D.Paragraph({
           alignment: D.AlignmentType.CENTER,
           spacing: { before: 237, line: 151, lineRule: D.LineRuleType.EXACT }, // 样例：段前237缇/行距151缇
-          children: [new D.TextRun({ text: String(text), font: FANGSONG, size: 14, bold: true, characterSpacing: -2 })] // 7pt 加粗
+          children: [new D.TextRun({ text: String(text), font: CELLFONT, size: 14, bold: true, characterSpacing: -6 })] // 7pt 加粗
         })]
       });
     };
@@ -159,7 +161,7 @@
         properties: {
           page: {
             size: { width: 11906, height: 16838 }, // A4
-            margin: { top: 1418, bottom: 1418, left: 1474, right: 1361 } // 上2.5/下2.5/左2.6/右2.4 cm
+            margin: { top: 1431, bottom: 0, left: 1476, right: 1355, header: 0, footer: 0 } // 与样例一致（下边距0，保证单页）
           }
         },
         children: [
