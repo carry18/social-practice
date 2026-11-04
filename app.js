@@ -701,8 +701,8 @@ if (typeof document !== "undefined") {
         const r = await callBudget({
           action: "syncBudgetGrid",
           sheetName: sheetName,
-          cols: g.cols, rows: g.rows, merges: g.merges, bolds: g.bolds,
-          cells: g.cells, ncols: g.ncols
+          cols: g.cols, rows: g.rows, merges: g.merges,
+          cells: g.cells, styles: g.styles, ncols: g.ncols
         });
         info.textContent = `✅ 已原样写入金山工作表「${r && r.sheet ? r.sheet : sheetName}」（${r.rows} 行 × ${r.cols} 列，含列宽/行高/合并）`;
         return;
@@ -820,24 +820,62 @@ if (typeof document !== "undefined") {
   let lastUploaded = null;       // 最近一次「上传调整后的 xlsx」解析出的支队数据
   let lastUploadedGrid = null;   // 该表的原始网格（值/列宽/行高/合并/加粗），用于原样复刻
 
-  /** 从工作表提取「原样复刻」所需的一切 */
+  /** 从工作表提取「原样复刻」所需的一切：值 + 列宽 + 行高 + 合并 + 样式桶 */
   function extractGrid(ws) {
     if (!ws || !ws["!ref"]) return null;
     const range = XLSX.utils.decode_range(ws["!ref"]);
-    const cells = [], bolds = [];
+    const cells = [], buckets = {};
+    const hex = c => (c && (c.rgb || c.theme !== undefined ? c.rgb : null)) || null;
+
     for (let r = range.s.r; r <= range.e.r; r++) {
       for (let c = range.s.c; c <= range.e.c; c++) {
         const addr = XLSX.utils.encode_cell({ r, c });
         const cell = ws[addr];
-        if (!cell || cell.v === undefined || cell.v === "") continue;
-        cells.push([r, c, typeof cell.v === "number" ? cell.v : String(cell.v)]);
-        if (cell.s && cell.s.font && cell.s.font.bold) bolds.push([r, c]);
+        if (!cell) continue;
+        const st = cell.s || null;
+        const fg = st && st.fill && st.fill.fgColor ? hex(st.fill.fgColor) : null;
+        const hasVal = cell.v !== undefined && cell.v !== null && cell.v !== "";
+        if (!hasVal && !fg) continue;                      // 空且无底色 → 忽略
+
+        if (hasVal) cells.push([r, c, typeof cell.v === "number" ? cell.v : String(cell.v)]);
+
+        if (st) {
+          const sig = {};
+          if (st.font) {
+            if (st.font.name) sig.n = st.font.name;
+            if (st.font.sz) sig.sz = st.font.sz;
+            if (st.font.bold) sig.b = 1;
+            if (st.font.italic) sig.i = 1;
+            const fc = hex(st.font.color); if (fc) sig.c = fc;
+          }
+          if (fg) sig.fg = fg;
+          if (st.alignment) {
+            if (st.alignment.horizontal) sig.h = st.alignment.horizontal;
+            if (st.alignment.vertical) sig.v = st.alignment.vertical;
+            if (st.alignment.wrapText) sig.w = 1;
+          }
+          if (st.numFmt) sig.nf = st.numFmt;
+          const key = JSON.stringify(sig);
+          if (key !== "{}") {
+            if (!buckets[key]) buckets[key] = { s: sig, cells: [] };
+            buckets[key].cells.push([r, c]);
+          }
+        }
       }
     }
+
     const cols = (ws["!cols"] || []).map(x => (x && (x.wch || x.width)) || 0);
     const rows = (ws["!rows"] || []).map(x => (x && x.hpt) || 0);
     const merges = (ws["!merges"] || []).map(m => [m.s.r, m.s.c, m.e.r, m.e.c]);
-    return { cells, bolds, cols, rows, merges, ncols: Math.min(range.e.c + 1, 60) };
+
+    // 单元格地址拼成「A1,B2,…」批量应用，减少调用次数
+    const styles = Object.keys(buckets).map(k => {
+      const b = buckets[k];
+      return { s: b.s, addr: b.cells.map(([r, c]) =>
+        XLSX.utils.encode_cell({ r, c })).join(",") };
+    });
+
+    return { cells, cols, rows, merges, styles, ncols: Math.min(range.e.c + 1, 60) };
   }
 
   async function handleDocxFile(file) {
