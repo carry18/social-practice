@@ -509,6 +509,7 @@ if (typeof document !== "undefined") {
     lastComputed = null;
     $("generate").disabled = true;
     $("generate-docx").disabled = true;
+    if ($("budget-sync")) { $("budget-sync").disabled = true; $("budget-sync-info").textContent = ""; }
     $("preview").style.display = "none";
     $("warn").style.display = "none";
   }
@@ -611,7 +612,57 @@ if (typeof document !== "undefined") {
     lastComputed = computed;
     $("generate").disabled = false;
     $("generate-docx").disabled = false;
+    if ($("budget-sync")) $("budget-sync").disabled = false;
     return computed;
+  }
+
+  /* ---------- 同步预算到金山「预算」文件 ---------- */
+  const SYNC_HOOK = 'https://1386267309-3bh6z757na.ap-shanghai.tencentscf.com';
+
+  function budgetSheetName() {
+    const season = ($("doc-season").value || "").trim();   // 例：2027年寒假
+    if (season) return season.replace(/年/, "") + "预算";    // 2027寒假预算
+    const t = ($("doc-title").value || "").trim();
+    return (t.replace(/预算$/, "") || "本期") + "预算";
+  }
+
+  async function syncBudget() {
+    const computed = lastComputed;
+    if (!computed) { alert("请先点击「生成预览」核对数据"); return; }
+    const btn = $("budget-sync"), info = $("budget-sync-info");
+    btn.disabled = true;
+    info.textContent = "正在写入金山…";
+    const rows = computed.map((t, i) => [
+      i + 1, t.B, t.C || "", t.D || "", t.E || "", t.people,
+      fmtNum(t.T), fmtNum(t.U), fmtNum(t.Y), fmtNum(t.AA), fmtNum(t.AB), t.S || ""
+    ]);
+    const sumBy = k => computed.reduce((a, t) => a + t[k], 0);
+    try {
+      const resp = await fetch(SYNC_HOOK, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          target: "budget",
+          Context: { argv: {
+            action: "syncBudget",
+            sheetName: budgetSheetName(),
+            title: ($("doc-title").value || "实践预算") + "表",
+            rows: rows,
+            total_G: fmtNum(sumBy("T")), total_H: fmtNum(sumBy("U")),
+            total_I: fmtNum(sumBy("Y")), total_J: fmtNum(sumBy("AA")),
+            total: fmtNum(sumBy("AB"))
+          } }
+        })
+      });
+      const d = await resp.json();
+      if (d.error) throw new Error(d.error);
+      const r = d.data && d.data.result;
+      info.textContent = `✅ 已写入金山工作表「${r && r.sheet ? r.sheet : budgetSheetName()}」（${computed.length} 支队）`;
+    } catch (e) {
+      info.textContent = "❌ 同步失败：" + e.message + "（请确认云函数已配 KDOCS_WEBHOOK_BUDGET）";
+    } finally {
+      btn.disabled = false;
+    }
   }
 
   function generate(fmt) {
@@ -682,6 +733,7 @@ if (typeof document !== "undefined") {
     $("preview-btn").addEventListener("click", computeAll);
     $("generate").addEventListener("click", () => generate("xlsx"));
     $("generate-docx").addEventListener("click", () => generate("docx"));
+    if ($("budget-sync")) $("budget-sync").addEventListener("click", syncBudget);
     $("drop").addEventListener("click", () => $("file").click());
     $("drop").addEventListener("dragover", e => { e.preventDefault(); $("drop").classList.add("hover"); });
     $("drop").addEventListener("dragleave", () => $("drop").classList.remove("hover"));
