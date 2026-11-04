@@ -17,8 +17,9 @@
   if (!$('note-gen')) return; // 页面没有该板块时静默退出
 
   /* ================= 代理调用 ================= */
-  function callKdocs(argv) {
-    return fetch(DEFAULT_HOOK, {
+  function callKdocs(argv, opts) {
+    var url = (opts && opts.note) ? (DEFAULT_HOOK + '?target=note') : DEFAULT_HOOK;
+    return fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ Context: { argv: argv } })
@@ -297,28 +298,33 @@
     }).then(function () {
       setStatus('⏳ 第 3/3 步：Word 已下载，正在同步到金山工作簿…');
       var yt = parseYearTerm(sheet);
+      // ① 写进「拨付说明」文件里它自己的脚本（那个脚本运行在自己的文档中，无需跨文件权限）
       return callKdocs({
         action: 'syncNote',
         name: yt.y + yt.tShort + '拨付说明',
-        fileName: '拨付说明',
         sheetName: yt.y + yt.tShort + '拨付说明',
-        separate: true,
-        cleanup: true,
-        dirUrl: (($('note-dir') && $('note-dir').value.trim()) || undefined),
+        separate: false,
+        cleanup: false,
         note: {
           title1: meta.title1, title2: meta.title2, body: meta.body, attach: meta.attach,
           rows: tableRows, total: totalStr
         }
-      });
+      }, { note: true });
     }).then(function (res) {
+      // ② 顺手清掉打款表工作簿里历史遗留的说明表（这是另一个文档，走主脚本）
+      return callKdocs({ action: 'cleanupNotes' }).then(function (removed) {
+        return { note: res, removed: removed || [] };
+      }, function () { return { note: res, removed: [] }; });
+    }).then(function (pack) {
+      var res = pack.note, removed = pack.removed;
       var where;
       if (res && res.mode === 'separate') {
         where = '② 金山云文档「' + esc(res.fileName) + '」里已写入工作表「' + esc(res.sheet) + '」' +
           (res.removed && res.removed.length ? '\n   已清理打款表工作簿里的旧说明表：' + esc(res.removed.join('、')) : '');
       } else {
-        where = '② 金山工作簿已写入工作表「' + esc(String((res && res.sheet) || res)) + '」' +
-          (res && res.fallbackReason ? '\n   ⚠️ 独立文档写入失败，已退回本工作簿（原因：' + esc(res.fallbackReason) + '）' : '');
+        where = '② 已在「拨付说明」文件里写入工作表「' + esc(String((res && res.sheet) || res)) + '」';
       }
+      if (removed && removed.length) where += '\n   已清理打款表里的旧说明表：' + esc(removed.join('、'));
       setStatus('✅ 全部完成！\n① Word 说明已下载到本地（报送财务用）\n' + where + '\n' +
         '共 ' + tableRows.length + ' 行明细，总计 ' + totalStr + ' 元。', '#1a7f37');
     }).catch(function (e) {
