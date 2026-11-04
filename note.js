@@ -300,13 +300,23 @@
       return callKdocs({
         action: 'syncNote',
         name: yt.y + yt.tShort + '拨付说明',
+        fileName: yt.y + yt.tShort + '拨付说明',
+        sheetName: '拨付说明',
+        separate: true,
         note: {
           title1: meta.title1, title2: meta.title2, body: meta.body, attach: meta.attach,
           rows: tableRows, total: totalStr
         }
       });
-    }).then(function (noteSheet) {
-      setStatus('✅ 全部完成！\n① Word 说明已下载到本地（报送财务用）\n② 金山工作簿已新建工作表「' + esc(String(noteSheet)) + '」存档\n' +
+    }).then(function (res) {
+      var where;
+      if (res && res.mode === 'separate') {
+        where = '② 金山云文档已更新独立文件「' + esc(res.fileName) + '」（工作表：' + esc(res.sheet) + '）';
+      } else {
+        where = '② 金山工作簿已写入工作表「' + esc(String((res && res.sheet) || res)) + '」' +
+          (res && res.fallbackReason ? '\n   ⚠️ 独立文档写入失败，已退回本工作簿（原因：' + esc(res.fallbackReason) + '）' : '');
+      }
+      setStatus('✅ 全部完成！\n① Word 说明已下载到本地（报送财务用）\n' + where + '\n' +
         '共 ' + tableRows.length + ' 行明细，总计 ' + totalStr + ' 元。', '#1a7f37');
     }).catch(function (e) {
       if (e.message === '__cancel__') { setStatus('已取消。请先在金山表格补全信息，再重新生成。'); return; }
