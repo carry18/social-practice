@@ -36,15 +36,21 @@
   function refreshList() {
     var btn = $('note-refresh');
     btn.disabled = true;
-    callKdocs({ action: 'list' }).then(function (names) {
+    callKdocs({ action: 'list' }).then(function (allNames) {
       var sel = $('note-sheet');
       var prev = sel.value;
-      sel.innerHTML = '';
-      (names || []).forEach(function (n) {
-        var op = document.createElement('option');
-        op.value = n; op.textContent = n; sel.appendChild(op);
+      // 只保留「像打款表」的工作表：排除决算表、说明表、系统预留表
+      var names = (allNames || []).filter(function (n) {
+        return !/决算|说明|WpsReserved|Sheet\d*$/i.test(n);
       });
-      if (!(names || []).length) {
+      sel.innerHTML = '';
+      names.forEach(function (n) {
+        var op = document.createElement('option');
+        op.value = n; op.textContent = n;
+        if (n === prev) op.selected = true;
+        sel.appendChild(op);
+      });
+      if (!names.length) {
         var op0 = document.createElement('option');
         op0.value = ''; op0.textContent = '（未读到工作表，请点刷新）'; sel.appendChild(op0);
       }
@@ -55,7 +61,9 @@
         var hits = (names || []).filter(function (n) { return /打款/.test(n); });
         if (hits.length) sel.value = hits[hits.length - 1];
       }
-      setStatus('✅ 工作表列表已刷新（共 ' + (names || []).length + ' 个，可在下拉框中切换）', '#1a7f37');
+      var hidden = (allNames || []).length - names.length;
+      setStatus('✅ 打款表列表已刷新（' + names.length + ' 个可选用' +
+        (hidden ? '，已忽略 ' + hidden + ' 个非打款表' : '') + '）', '#1a7f37');
     }).catch(function (e) {
       setStatus('❌ 获取工作表列表失败：' + e.message, '#b3261e');
     }).finally(function () { btn.disabled = false; });
