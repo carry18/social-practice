@@ -333,9 +333,9 @@
       return callKdocs({
         action: 'syncBudgetGrid', sheetName: g.sheetName, cells: g.cells,
         merges: g.merges, styles: g.styles, cols: g.cols, rows: g.rows, ncols: g.ncols
-      });
+      }, { note: true });   // 写进「拨付说明」文件（同名工作表自动覆盖）
     }).then(function () {
-      setStatus('✅ 已生成「' + g.sheetName + '」：按院系分组，每个支队一行，相同内容自动合并。\n原始打款表未改动。', '#1a7f37');
+      setStatus('✅ 已在「拨付说明」文件里生成「' + g.sheetName + '」：按院系分组，每个支队一行，相同内容自动合并。\n（同名工作表已覆盖；原始打款表未改动）', '#1a7f37');
     }).catch(function (e) {
       setStatus('❌ 汇总失败：' + esc(e.message), '#b3261e');
     }).finally(function () {
