@@ -217,16 +217,52 @@
   /* ================= 按院系汇总 ================= */
   var SELFPAY_RE2 = /自己报销|自行报销|自付|不拨付|自行处理/;
 
+  /* 院系别名归一：全称 / 简称 / 常见写法 → 统一简称 */
+  var DEPT_ALIAS = {
+    '精密仪器系': '精仪系', '精密仪器与机械学系': '精仪系',
+    '电子工程系': '电子系', '电子信息工程学院': '电子系',
+    '计算机科学与技术系': '计算机系', '计算机学院': '计算机系',
+    '自动化': '自动化系',
+    '机械工程系': '机械系', '机械工程学院': '机械系',
+    '土木工程系': '土木系', '土木水利学院': '土木系',
+    '化学工程系': '化工系',
+    '材料科学与工程系': '材料学院', '材料科学与工程学院': '材料学院',
+    '生命科学学院': '生命学院', '生命科学与技术学院': '生命学院',
+    '经济管理学院': '经管学院',
+    '公共管理学院': '公管学院',
+    '新闻与传播学院': '新闻学院', '新闻系': '新闻学院',
+    '社会科学学院': '社科学院',
+    '电机工程与应用电子技术系': '电机系',
+    '能源与动力工程系': '能动系', '热能工程系': '能动系',
+    '航天航空学院': '航院', '航空航天学院': '航院',
+    '工程物理系': '工物系',
+    '核能与新能源技术研究院': '核研院',
+    '车辆与运载学院': '车辆学院', '汽车工程系': '车辆学院',
+    '深圳国际研究生院': '深研院',
+    '集成电路学院': '集成电路', '集成电路技术学院': '集成电路',
+    '基础医学院': '医学院',
+    '建筑技术科学系': '建筑学院',
+    '工业工程系': '工业工程系'
+  };
+
+  function normalizeDept(name) {
+    var d = String(name || '').replace(/\s|　/g, '').trim();
+    if (!d) return '（未填院系）';
+    return DEPT_ALIAS[d] || d;
+  }
+
   /** 两级聚合：院系 → 支队；返回 [{dept,total,squads:[{place,amount,leader,cert,proj,projId,selfPay}]}] */
   function buildDeptRows(rows) {
     var map = {}, order = [];
     rows.forEach(function (r) {
-      var dept = String(r.dept || '').trim() || '（未填院系）';
+      var dept = normalizeDept(r.dept);
       var place = String(r.place || '').trim() || '（未填地点）';
       var amt = parseFloat(String(r.amount).replace(/[^\d.\-]/g, '')) || 0;
       var isSelf = SELFPAY_RE2.test(String(r.leader || '') + String(r.proj || ''));
 
-      if (!map[dept]) { map[dept] = { dept: dept, total: 0, squads: {}, order: [] }; order.push(dept); }
+      var rawName = String(r.dept || '').trim() || '（未填院系）';
+      if (!map[dept]) { map[dept] = { dept: dept, total: 0, squads: {}, order: [], names: {} }; order.push(dept); }
+      map[dept].names[rawName] = (map[dept].names[rawName] || 0) + 1;
       var g = map[dept];
       g.total += amt;
 
@@ -245,6 +281,12 @@
 
     var list = order.map(function (k) { return map[k]; });
     list.forEach(function (g) {
+      // 显示名取「出现次数最多」的写法（并列取第一个）
+      var best = g.dept, bestN = 0;
+      Object.keys(g.names || {}).forEach(function (n) {
+        if (g.names[n] > bestN) { bestN = g.names[n]; best = n; }
+      });
+      g.dept = best;
       g.items = g.order.map(function (p) { return g.squads[p]; });
       g.items.sort(function (a, b) { return b.amount - a.amount; });
     });
