@@ -222,11 +222,15 @@
     rows.forEach(function (r) {
       var dept = String(r.dept || '').trim() || '（未填院系）';
       var amt = parseFloat(String(r.amount).replace(/[^\d.\-]/g, '')) || 0;
-      if (!map[dept]) { map[dept] = { dept: dept, amount: 0, squads: [], selfPay: 0 }; order.push(dept); }
+      if (!map[dept]) { map[dept] = { dept: dept, amount: 0, squads: [], selfPay: 0, leaders: [], certs: [] }; order.push(dept); }
       var m = map[dept];
       m.amount += amt;
       var sq = String(r.place || '').trim();
       if (sq && m.squads.indexOf(sq) < 0) m.squads.push(sq);
+      var ld = String(r.leader || '').trim();
+      if (ld && m.leaders.indexOf(ld) < 0) m.leaders.push(ld);
+      var ct = String(r.cert || '').trim();
+      if (ct && m.certs.indexOf(ct) < 0) m.certs.push(ct);
       if (SELFPAY_RE2.test(String(r.leader || '') + String(r.proj || ''))) m.selfPay += amt;
     });
     var list = order.map(function (k) { return map[k]; });
@@ -257,7 +261,8 @@
       // 组装网格：标题 + 表头 + 数据 + 合计
       var cells = [], merges = [];
       var put = function (r, c, v) { if (v !== '' && v !== null && v !== undefined) cells.push([r, c, v]); };
-      var HEAD = ['序号', '打款院系', '涉及支队数', '打款金额', '占比(%)', '涉及支地', '备注'];
+      var HEAD = ['序号', '打款院系', '涉及支队数', '打款金额', '占比(%)', '涉及支地',
+                  '项目负责人', '工作证号', '收款户名', '开户银行', '银行账号', '联系人及电话', '备注'];
 
       put(0, 0, summarySheetName(sheet) + '（按院系汇总）');
       merges.push([0, 0, 0, HEAD.length - 1]);
@@ -270,19 +275,27 @@
         put(r, 3, Math.round(m.amount * 100) / 100);
         put(r, 4, total ? Math.round(m.amount / total * 1000) / 10 : 0);
         put(r, 5, m.squads.join('、'));
-        put(r, 6, m.selfPay ? '含自己报销 ' + fmtAmount(m.selfPay) + ' 元' : '');
+        put(r, 6, m.leaders.join('、'));
+        put(r, 7, m.certs.join('、'));
+        put(r, 8, m.dept);            // 收款户名默认=院系名，可手改
+        put(r, 9, '');
+        put(r, 10, '');
+        put(r, 11, m.leaders.join('、'));
+        put(r, 12, m.selfPay ? '含自己报销 ' + fmtAmount(m.selfPay) + ' 元' : '');
       });
       var totalR = 2 + list.length;
       put(totalR, 0, '合计');
       merges.push([totalR, 0, totalR, 1]);
+      merges.push([totalR, 5, totalR, 11]);
       put(totalR, 3, Math.round(total * 100) / 100);   // 支队数各院系重复计，合计行不写
       put(totalR, 4, 100);
 
       var styles = [
         { s: { n: '仿宋_GB2312', sz: 12, b: 1, h: 'center', v: 'center' }, addr: 'A1' },
-        { s: { n: '仿宋_GB2312', sz: 10, b: 1, h: 'center', v: 'center', w: 1, fg: 'FFD9E1F2' }, addr: 'A2:G2' },
-        { s: { n: '仿宋_GB2312', sz: 10, h: 'center', v: 'center', w: 1 }, addr: 'A3:G' + (totalR + 1) },
-        { s: { n: '仿宋_GB2312', sz: 10, b: 1, h: 'center', v: 'center' }, addr: 'A' + (totalR + 1) + ':G' + (totalR + 1) }
+        { s: { n: '仿宋_GB2312', sz: 10, b: 1, h: 'center', v: 'center', w: 1, fg: 'FFD9E1F2' }, addr: 'A2:M2' },
+        { s: { n: '仿宋_GB2312', sz: 10, h: 'center', v: 'center', w: 1 }, addr: 'A3:M' + (totalR + 1) },
+        { s: { n: '仿宋_GB2312', sz: 10, b: 1, h: 'center', v: 'center' }, addr: 'A' + (totalR + 1) + ':M' + (totalR + 1) },
+        { s: { n: '仿宋_GB2312', sz: 10, h: 'center', v: 'center', fg: 'FFFFF2CC' }, addr: 'I3:K' + totalR }
       ];
 
       setStatus('⏳ 正在写入金山工作表「' + esc(summarySheetName(sheet)) + '」…');
@@ -292,7 +305,7 @@
         cells: cells,
         merges: merges,
         styles: styles,
-        cols: [6, 22, 8, 13, 9, 40, 26],
+        cols: [6, 20, 10, 13, 9, 34, 14, 14, 20, 22, 22, 14, 24],
         rows: [26, 28],
         ncols: HEAD.length
       });
