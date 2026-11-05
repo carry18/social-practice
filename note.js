@@ -317,6 +317,50 @@
     };
   }
 
+  /** 把汇总网格导出成本地 xlsx（与金山内容一致） */
+  function downloadSummaryXlsx(g) {
+    if (!window.XLSX) return;
+    var maxR = 0;
+    g.cells.forEach(function (c) { if (c[0] > maxR) maxR = c[0]; });
+    var aoa = [];
+    for (var r = 0; r <= maxR; r++) {
+      var row = [];
+      for (var c = 0; c < g.ncols; c++) row.push('');
+      aoa.push(row);
+    }
+    g.cells.forEach(function (c) { aoa[c[0]][c[1]] = c[2]; });
+
+    var ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!merges'] = (g.merges || []).map(function (m) {
+      return { s: { r: m[0], c: m[1] }, e: { r: m[2], c: m[3] } };
+    });
+    ws['!cols'] = (g.cols || []).map(function (w) { return { wch: w }; });
+
+    var border = { style: 'thin', color: { rgb: 'FF999999' } };
+    var box = { top: border, bottom: border, left: border, right: border };
+    var ref = XLSX.utils.decode_range(ws['!ref']);
+    for (var R = ref.s.r; R <= ref.e.r; R++) {
+      for (var C = ref.s.c; C <= ref.e.c; C++) {
+        var addr = XLSX.utils.encode_cell({ r: R, c: C });
+        if (!ws[addr]) ws[addr] = { t: 's', v: '' };
+        var st = ws[addr].s || (ws[addr].s = {});
+        st.border = box;
+        st.alignment = { horizontal: 'center', vertical: 'center', wrapText: true };
+        st.font = { name: '仿宋_GB2312', sz: 10 };
+        if (R === 0) {
+          st.font.bold = true; st.font.sz = 14;
+        } else if (R === 1) {
+          st.font.bold = true;
+          st.fill = { patternType: 'solid', fgColor: { rgb: 'FFD9E1F2' } };
+        }
+      }
+    }
+
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, String(g.sheetName).slice(0, 31));
+    XLSX.writeFile(wb, g.sheetName + '.xlsx');
+  }
+
   function generateSummary() {
     var sheet = $('note-sheet').value.trim();
     if (!sheet) { alert('请先选择「打款工作表」'); return; }
@@ -335,7 +379,8 @@
         merges: g.merges, styles: g.styles, cols: g.cols, rows: g.rows, ncols: g.ncols
       }, { note: true });   // 写进「拨付说明」文件（同名工作表自动覆盖）
     }).then(function () {
-      setStatus('✅ 已在「拨付说明」文件里生成「' + g.sheetName + '」：按院系分组，每个支队一行，相同内容自动合并。\n（同名工作表已覆盖；原始打款表未改动）', '#1a7f37');
+      try { downloadSummaryXlsx(g); } catch (e) { /* 下载失败不影响金山写入 */ }
+      setStatus('✅ 已在「拨付说明」文件里生成「' + g.sheetName + '」，并已下载同名 xlsx。\n按院系分组、每个支队一行、相同内容自动合并；（同名工作表已覆盖）', '#1a7f37');
     }).catch(function (e) {
       setStatus('❌ 汇总失败：' + esc(e.message), '#b3261e');
     }).finally(function () {
