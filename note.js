@@ -252,9 +252,121 @@
     return list;
   }
 
-  function summarySheetName(sheet) {
+  function summarySheetName(sheet, kind) {
     var yt = parseYearTerm(sheet);
-    return yt.y + yt.tShort + '打款院系汇总';
+    return yt.y + yt.tShort + '打款汇总' + (kind === 'dept' ? '（院系）' : '（明细）');
+  }
+
+  /** 表一：明细（院系分组 + 支队明细，同值列自动合并） */
+  function buildDetailGrid(list, sheet) {
+    var HEAD = ['打款院系', '打款总金额', '项目负责人', '工作证号', '项目名称', '项目编号', '支队', '对应金额'];
+    var cells = [], merges = [], put = function (r, c, v) {
+      if (v !== '' && v !== null && v !== undefined) cells.push([r, c, v]);
+    };
+    put(0, 0, summarySheetName(sheet, 'detail') + '（院系 / 支队明细）');
+    merges.push([0, 0, 0, HEAD.length - 1]);
+    HEAD.forEach(function (h, i) { put(1, i, h); });
+
+    var row = 2, sum = 0;
+    list.forEach(function (g) {
+      var startRow = row, items = g.items || [];
+      var sameOf = function (key) {
+        var first = String(items[0][key] || '');
+        return items.every(function (it) { return String(it[key] || '') === first; }) ? first : null;
+      };
+      var sl = sameOf('leader'), sc = sameOf('cert'), sp = sameOf('proj'), si = sameOf('projId');
+
+      items.forEach(function (it, idx) {
+        put(row, 0, idx === 0 ? g.dept : '');
+        put(row, 1, idx === 0 ? Math.round(g.total * 100) / 100 : '');
+        put(row, 2, (sl !== null && idx > 0) ? '' : (it.leader || ''));
+        put(row, 3, (sc !== null && idx > 0) ? '' : (it.cert || ''));
+        put(row, 4, (sp !== null && idx > 0) ? '' : (it.proj || ''));
+        put(row, 5, (si !== null && idx > 0) ? '' : (it.projId || ''));
+        put(row, 6, it.place + (it.selfPay ? '（自己报销）' : ''));
+        put(row, 7, Math.round(it.amount * 100) / 100);
+        row++;
+      });
+      if (items.length > 1) {
+        merges.push([startRow, 0, row - 1, 0]);
+        merges.push([startRow, 1, row - 1, 1]);
+        if (sl !== null) merges.push([startRow, 2, row - 1, 2]);
+        if (sc !== null) merges.push([startRow, 3, row - 1, 3]);
+        if (sp !== null) merges.push([startRow, 4, row - 1, 4]);
+        if (si !== null) merges.push([startRow, 5, row - 1, 5]);
+      }
+      sum += g.total;
+    });
+
+    var totalR = row;
+    put(totalR, 0, '合计');
+    put(totalR, 1, Math.round(sum * 100) / 100);
+    merges.push([totalR, 2, totalR, 6]);
+
+    return {
+      sheetName: summarySheetName(sheet, 'detail'),
+      ncols: HEAD.length, cells: cells, merges: merges,
+      cols: [22, 14, 14, 15, 32, 14, 34, 14],
+      rows: [26, 28],
+      styles: [
+        { s: { n: '仿宋_GB2312', sz: 12, b: 1, h: 'center', v: 'center' }, addr: 'A1' },
+        { s: { n: '仿宋_GB2312', sz: 10, b: 1, h: 'center', v: 'center', w: 1, fg: 'FFD9E1F2' }, addr: 'A2:H2' },
+        { s: { n: '仿宋_GB2312', sz: 10, h: 'center', v: 'center', w: 1 }, addr: 'A3:H' + (totalR + 1) },
+        { s: { n: '仿宋_GB2312', sz: 10, b: 1, h: 'center', v: 'center' }, addr: 'A' + (totalR + 1) + ':H' + (totalR + 1) }
+      ]
+    };
+  }
+
+  /** 表二：按院系（一院系一行 + 收款信息，给报销老师看） */
+  function buildDeptGrid(list, sheet) {
+    var HEAD = ['序号', '打款院系', '打款总金额', '项目负责人', '工作证号',
+                '涉及支队', '收款户名', '开户银行', '银行账号', '联系人及电话'];
+    var cells = [], merges = [], put = function (r, c, v) {
+      if (v !== '' && v !== null && v !== undefined) cells.push([r, c, v]);
+    };
+    put(0, 0, summarySheetName(sheet, 'dept') + '（一院系一行）');
+    merges.push([0, 0, 0, HEAD.length - 1]);
+    HEAD.forEach(function (h, i) { put(1, i, h); });
+
+    var row = 2, sum = 0;
+    list.forEach(function (g, i) {
+      var leaders = [], certs = [];
+      (g.items || []).forEach(function (it) {
+        if (it.leader && leaders.indexOf(it.leader) < 0) leaders.push(it.leader);
+        if (it.cert && certs.indexOf(it.cert) < 0) certs.push(it.cert);
+      });
+      put(row, 0, i + 1);
+      put(row, 1, g.dept);
+      put(row, 2, Math.round(g.total * 100) / 100);
+      put(row, 3, leaders.join('、'));
+      put(row, 4, certs.join('、'));
+      put(row, 5, (g.items || []).map(function (it) {
+        return it.place + ' ' + fmtAmount(it.amount);
+      }).join('；'));
+      put(row, 6, g.dept);           // 收款户名默认=院系，可手改
+      row++;
+      sum += g.total;
+    });
+
+    var totalR = row;
+    put(totalR, 0, '合计');
+    put(totalR, 2, Math.round(sum * 100) / 100);
+    merges.push([totalR, 0, totalR, 1]);
+    merges.push([totalR, 3, totalR, 9]);
+
+    return {
+      sheetName: summarySheetName(sheet, 'dept'),
+      ncols: HEAD.length, cells: cells, merges: merges,
+      cols: [6, 20, 14, 16, 15, 46, 20, 22, 22, 16],
+      rows: [26, 30],
+      styles: [
+        { s: { n: '仿宋_GB2312', sz: 12, b: 1, h: 'center', v: 'center' }, addr: 'A1' },
+        { s: { n: '仿宋_GB2312', sz: 10, b: 1, h: 'center', v: 'center', w: 1, fg: 'FFD9E1F2' }, addr: 'A2:J2' },
+        { s: { n: '仿宋_GB2312', sz: 10, h: 'center', v: 'center', w: 1 }, addr: 'A3:J' + (totalR + 1) },
+        { s: { n: '仿宋_GB2312', sz: 10, b: 1, h: 'center', v: 'center' }, addr: 'A' + (totalR + 1) + ':J' + (totalR + 1) },
+        { s: { n: '仿宋_GB2312', sz: 10, h: 'center', v: 'center', fg: 'FFFFF2CC' }, addr: 'G3:I' + totalR }
+      ]
+    };
   }
 
   function generateSummary() {
@@ -262,81 +374,28 @@
     if (!sheet) { alert('请先选择「打款工作表」'); return; }
     var btn = $('note-summary');
     btn.disabled = true;
-    setStatus('⏳ 正在读取「' + esc(sheet) + '」并按院系汇总…');
+    setStatus('⏳ 正在读取「' + esc(sheet) + '」并按院系整理…');
 
+    var g1, g2;
     callKdocs({ action: 'export', sheet: sheet }).then(function (res) {
       var rows = res.rows || [];
       if (!rows.length) throw new Error('表里读不到数据行');
       var list = buildDeptRows(rows);
-      var total = list.reduce(function (t, m) { return t + m.amount; }, 0);
-
-      // 组装网格：标题 + 表头 + 数据 + 合计
-      var cells = [], merges = [];
-      var put = function (r, c, v) { if (v !== '' && v !== null && v !== undefined) cells.push([r, c, v]); };
-      // 列：院系 / 打款总金额 / 负责人 / 证号 / 项目名称 / 项目编号 / 支队 / 对应金额
-      var HEAD = ['打款院系', '打款总金额', '项目负责人', '工作证号', '项目名称', '项目编号', '支队', '对应金额'];
-      var NCOL = HEAD.length;
-      var cells = [], merges = [];
-
-      put(0, 0, summarySheetName(sheet) + '（按院系汇总）');
-      merges.push([0, 0, 0, NCOL - 1]);
-      HEAD.forEach(function (h, i) { put(1, i, h); });
-
-      var row = 2;
-      var deptTotalSum = 0;
-      list.forEach(function (g) {
-        var startRow = row;
-        var items = g.items || [];
-        // 组内 4 个字段是否完全相同 → 决定能否合并
-        var sameOf = function (key) {
-          var first = String(items[0][key] || '');
-          return items.every(function (it) { return String(it[key] || '') === first; }) ? first : null;
-        };
-        var sameLeader = sameOf('leader'), sameCert = sameOf('cert'),
-            sameProj = sameOf('proj'), sameProjId = sameOf('projId');
-
-        items.forEach(function (it, idx) {
-          put(row, 0, idx === 0 ? g.dept : '');
-          put(row, 1, idx === 0 ? Math.round(g.total * 100) / 100 : '');
-          put(row, 2, (sameLeader !== null && idx > 0) ? '' : (it.leader || ''));
-          put(row, 3, (sameCert !== null && idx > 0) ? '' : (it.cert || ''));
-          put(row, 4, (sameProj !== null && idx > 0) ? '' : (it.proj || ''));
-          put(row, 5, (sameProjId !== null && idx > 0) ? '' : (it.projId || ''));
-          put(row, 6, it.place + (it.selfPay ? '（自己报销）' : ''));
-          put(row, 7, Math.round(it.amount * 100) / 100);
-          row++;
-        });
-
-        // 「院系」「打款总金额」永远合并
-        if (items.length > 1) {
-          merges.push([startRow, 0, row - 1, 0]);
-          merges.push([startRow, 1, row - 1, 1]);
-          if (sameLeader !== null) merges.push([startRow, 2, row - 1, 2]);
-          if (sameCert !== null) merges.push([startRow, 3, row - 1, 3]);
-          if (sameProj !== null) merges.push([startRow, 4, row - 1, 4]);
-          if (sameProjId !== null) merges.push([startRow, 5, row - 1, 5]);
-        }
-        deptTotalSum += g.total;
-      });
-
-      var totalR = row;
-      put(totalR, 0, '合计');
-      put(totalR, 1, Math.round(deptTotalSum * 100) / 100);
-      merges.push([totalR, 2, totalR, 6]);
-
-      setStatus('⏳ 正在写入金山工作表「' + esc(summarySheetName(sheet)) + '」…');
+      g1 = buildDetailGrid(list, sheet);
+      g2 = buildDeptGrid(list, sheet);
+      setStatus('⏳ 正在写入「' + esc(g1.sheetName) + '」…');
       return callKdocs({
-        action: 'syncBudgetGrid',
-        sheetName: summarySheetName(sheet),
-        cells: cells,
-        merges: merges,
-        styles: styles,
-        cols: [22, 14, 14, 15, 32, 14, 34, 14],
-        rows: [26, 28],
-        ncols: HEAD.length
+        action: 'syncBudgetGrid', sheetName: g1.sheetName, cells: g1.cells,
+        merges: g1.merges, styles: g1.styles, cols: g1.cols, rows: g1.rows, ncols: g1.ncols
       });
-    }).then(function (r) {
-      setStatus('✅ 已生成院系汇总表「' + esc(String(r && r.sheet ? r.sheet : summarySheetName(sheet))) + '」',
+    }).then(function () {
+      setStatus('⏳ 正在写入「' + esc(g2.sheetName) + '」…');
+      return callKdocs({
+        action: 'syncBudgetGrid', sheetName: g2.sheetName, cells: g2.cells,
+        merges: g2.merges, styles: g2.styles, cols: g2.cols, rows: g2.rows, ncols: g2.ncols
+      });
+    }).then(function () {
+      setStatus('✅ 已生成两张汇总表：\n① ' + g1.sheetName + '（院系/支队明细）\n② ' + g2.sheetName + '（一院系一行，含收款信息）\n原始打款表未改动。',
         '#1a7f37');
     }).catch(function (e) {
       setStatus('❌ 汇总失败：' + esc(e.message), '#b3261e');
