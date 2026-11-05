@@ -214,6 +214,98 @@
     });
   }
 
+  /* ================= 按院系汇总 ================= */
+  var SELFPAY_RE2 = /自己报销|自行报销|自付|不拨付|自行处理/;
+
+  function buildDeptRows(rows) {
+    var map = {}, order = [];
+    rows.forEach(function (r) {
+      var dept = String(r.dept || '').trim() || '（未填院系）';
+      var amt = parseFloat(String(r.amount).replace(/[^\d.\-]/g, '')) || 0;
+      if (!map[dept]) { map[dept] = { dept: dept, amount: 0, squads: [], selfPay: 0 }; order.push(dept); }
+      var m = map[dept];
+      m.amount += amt;
+      var sq = String(r.place || '').trim();
+      if (sq && m.squads.indexOf(sq) < 0) m.squads.push(sq);
+      if (SELFPAY_RE2.test(String(r.leader || '') + String(r.proj || ''))) m.selfPay += amt;
+    });
+    var list = order.map(function (k) { return map[k]; });
+    // 支队数 = 该院系参与的不同实践地点数（续行不重复计）
+    list.forEach(function (m) { m.count = m.squads.length || 1; });
+    list.sort(function (a, b) { return b.amount - a.amount; });
+    return list;
+  }
+
+  function summarySheetName(sheet) {
+    var yt = parseYearTerm(sheet);
+    return yt.y + yt.tShort + '打款院系汇总';
+  }
+
+  function generateSummary() {
+    var sheet = $('note-sheet').value.trim();
+    if (!sheet) { alert('请先选择「打款工作表」'); return; }
+    var btn = $('note-summary');
+    btn.disabled = true;
+    setStatus('⏳ 正在读取「' + esc(sheet) + '」并按院系汇总…');
+
+    callKdocs({ action: 'export', sheet: sheet }).then(function (res) {
+      var rows = res.rows || [];
+      if (!rows.length) throw new Error('表里读不到数据行');
+      var list = buildDeptRows(rows);
+      var total = list.reduce(function (t, m) { return t + m.amount; }, 0);
+
+      // 组装网格：标题 + 表头 + 数据 + 合计
+      var cells = [], merges = [];
+      var put = function (r, c, v) { if (v !== '' && v !== null && v !== undefined) cells.push([r, c, v]); };
+      var HEAD = ['序号', '打款院系', '涉及支队数', '打款金额', '占比(%)', '涉及支地', '备注'];
+
+      put(0, 0, summarySheetName(sheet) + '（按院系汇总）');
+      merges.push([0, 0, 0, HEAD.length - 1]);
+      HEAD.forEach(function (h, i) { put(1, i, h); });
+      list.forEach(function (m, i) {
+        var r = 2 + i;
+        put(r, 0, i + 1);
+        put(r, 1, m.dept);
+        put(r, 2, m.count);
+        put(r, 3, Math.round(m.amount * 100) / 100);
+        put(r, 4, total ? Math.round(m.amount / total * 1000) / 10 : 0);
+        put(r, 5, m.squads.join('、'));
+        put(r, 6, m.selfPay ? '含自己报销 ' + fmtAmount(m.selfPay) + ' 元' : '');
+      });
+      var totalR = 2 + list.length;
+      put(totalR, 0, '合计');
+      merges.push([totalR, 0, totalR, 1]);
+      put(totalR, 3, Math.round(total * 100) / 100);   // 支队数各院系重复计，合计行不写
+      put(totalR, 4, 100);
+
+      var styles = [
+        { s: { n: '仿宋_GB2312', sz: 12, b: 1, h: 'center', v: 'center' }, addr: 'A1' },
+        { s: { n: '仿宋_GB2312', sz: 10, b: 1, h: 'center', v: 'center', w: 1, fg: 'FFD9E1F2' }, addr: 'A2:G2' },
+        { s: { n: '仿宋_GB2312', sz: 10, h: 'center', v: 'center', w: 1 }, addr: 'A3:G' + (totalR + 1) },
+        { s: { n: '仿宋_GB2312', sz: 10, b: 1, h: 'center', v: 'center' }, addr: 'A' + (totalR + 1) + ':G' + (totalR + 1) }
+      ];
+
+      setStatus('⏳ 正在写入金山工作表「' + esc(summarySheetName(sheet)) + '」…');
+      return callKdocs({
+        action: 'syncBudgetGrid',
+        sheetName: summarySheetName(sheet),
+        cells: cells,
+        merges: merges,
+        styles: styles,
+        cols: [6, 22, 8, 13, 9, 40, 26],
+        rows: [26, 28],
+        ncols: HEAD.length
+      });
+    }).then(function (r) {
+      setStatus('✅ 已生成院系汇总表「' + esc(String(r && r.sheet ? r.sheet : summarySheetName(sheet))) + '」',
+        '#1a7f37');
+    }).catch(function (e) {
+      setStatus('❌ 汇总失败：' + esc(e.message), '#b3261e');
+    }).finally(function () {
+      btn.disabled = false;
+    });
+  }
+
   /* ================= 主流程 ================= */
   function generate() {
     var sheet = $('note-sheet').value.trim();
@@ -343,4 +435,5 @@
     });
   }
   $('note-gen').onclick = generate;
+  $('note-summary').onclick = generateSummary;
 })();
