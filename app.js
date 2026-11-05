@@ -616,6 +616,30 @@ if (typeof document !== "undefined") {
     return computed;
   }
 
+  /* ---------- 期次下拉：自动拼「公文标题」与「季度表述」 ---------- */
+  const TERM_TITLE = { '寒假': '寒假', '暑期': '暑假', '春季学期中': '春季学期中', '秋季学期中': '秋季学期中' };
+
+  function fillYearOptions() {
+    const sel = $("doc-year");
+    if (!sel || sel.options.length) return;
+    const now = new Date().getFullYear();
+    for (let y = now - 2; y <= now + 4; y++) {
+      const op = document.createElement("option");
+      op.value = String(y); op.textContent = y + "年";
+      sel.appendChild(op);
+    }
+    sel.value = String(now);
+    const m = ($("doc-season").value || "").match(/(20\d{2})/);
+    if (m) sel.value = m[1];
+  }
+
+  function applyTerm() {
+    const y = $("doc-year").value || String(new Date().getFullYear());
+    const term = $("doc-term").value || "暑期";
+    $("doc-season").value = y + "年" + term;                       // 2027年暑期
+    $("doc-title").value = y + "年" + (TERM_TITLE[term] || term) + "“清华学子地域行”实践预算";
+  }
+
   /* ---------- 同步预算到金山「预算」文件 ---------- */
   const SYNC_HOOK = 'https://1386267309-3bh6z757na.ap-shanghai.tencentscf.com';
 
@@ -989,6 +1013,11 @@ if (typeof document !== "undefined") {
 
   document.addEventListener("DOMContentLoaded", async () => {
     loadLocal(); renderEditor();
+    fillYearOptions();
+    ["doc-year", "doc-term"].forEach(function (id) {
+      const el = $(id);
+      if (el) el.addEventListener("change", function () { applyTerm(); invalidate && invalidate(); });
+    });
     // 恢复上次上传的完整网格模板（刷新页面后仍能全列写入金山）
     try {
       const saved = localStorage.getItem("budgetGrid");

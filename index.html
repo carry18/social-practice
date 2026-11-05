@@ -165,6 +165,15 @@
     <h2>② 生成预算文件</h2>
     <p class="hint" id="fare-info">票价库加载中…</p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+      <label class="hint">期次
+        <select id="doc-year" style="padding:4px 6px"></select>
+        <select id="doc-term" style="padding:4px 6px">
+          <option value="寒假">寒假</option>
+          <option value="暑期" selected>暑期</option>
+          <option value="春季学期中">春季学期中</option>
+          <option value="秋季学期中">秋季学期中</option>
+        </select>
+      </label>
       <label class="hint">公文标题 <input id="doc-title" value="2026年暑假“清华学子地域行”实践预算" style="width:300px;padding:4px 6px"></label>
       <label class="hint">季度表述 <input id="doc-season" value="2026年暑期" style="width:110px;padding:4px 6px"></label>
       <label class="hint"><input type="checkbox" id="live-first" checked> 优先实时查询 12306 最新票价（约15~30秒/段；不勾则直接用票价库快照，秒出）</label>
@@ -261,9 +270,9 @@
   show(last || 'overview');
 })();
 </script>
-<script src="overview.js?v=20261105c"></script>
-<script src="app.js?v=20261105c"></script>
-<script src="payout.js?v=20261105c"></script>
-<script src="note.js?v=20261105c"></script>
+<script src="overview.js?v=20261105d"></script>
+<script src="app.js?v=20261105d"></script>
+<script src="payout.js?v=20261105d"></script>
+<script src="note.js?v=20261105d"></script>
 </body>
 </html>
