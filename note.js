@@ -217,38 +217,64 @@
   /* ================= 按院系汇总 ================= */
   var SELFPAY_RE2 = /自己报销|自行报销|自付|不拨付|自行处理/;
 
-  /* 院系别名归一：全称 / 简称 / 常见写法 → 统一简称 */
-  var DEPT_ALIAS = {
-    '精密仪器系': '精仪系', '精密仪器与机械学系': '精仪系',
-    '电子工程系': '电子系', '电子信息工程学院': '电子系',
-    '计算机科学与技术系': '计算机系', '计算机学院': '计算机系',
-    '自动化': '自动化系',
-    '机械工程系': '机械系', '机械工程学院': '机械系',
-    '土木工程系': '土木系', '土木水利学院': '土木系',
-    '化学工程系': '化工系',
-    '材料科学与工程系': '材料学院', '材料科学与工程学院': '材料学院',
-    '生命科学学院': '生命学院', '生命科学与技术学院': '生命学院',
-    '经济管理学院': '经管学院',
-    '公共管理学院': '公管学院',
-    '新闻与传播学院': '新闻学院', '新闻系': '新闻学院',
-    '社会科学学院': '社科学院',
-    '电机工程与应用电子技术系': '电机系',
-    '能源与动力工程系': '能动系', '热能工程系': '能动系',
-    '航天航空学院': '航院', '航空航天学院': '航院',
-    '工程物理系': '工物系',
-    '核能与新能源技术研究院': '核研院',
-    '车辆与运载学院': '车辆学院', '汽车工程系': '车辆学院',
-    '深圳国际研究生院': '深研院',
-    '集成电路学院': '集成电路', '集成电路技术学院': '集成电路',
-    '基础医学院': '医学院',
-    '建筑技术科学系': '建筑学院',
-    '工业工程系': '工业工程系'
-  };
+  /* ================= 院系别名库（dept_alias.json） ================= */
+  var DEPT_LIB = null;          // { canonical -> aliases[] } 与查找表
+  var DEPT_LOOKUP = {};         // 各种写法(归一后) -> canonical
+  var DEPT_UNKNOWN = {};        // 本次未匹配到的院系名（用于提示）
 
+  function cleanName(s) {
+    return String(s || '')
+      .replace(/[\s\u3000]/g, '')      // 去空格/全角空格
+      .replace(/[（(].*?[)）]/g, '')    // 去括号备注
+      .replace(/[，,、;；]/g, '');
+  }
+
+  function buildDeptLookup(list) {
+    DEPT_LOOKUP = {};
+    (list || []).forEach(function (d) {
+      if (!d || !d.canonical) return;
+      DEPT_LOOKUP[cleanName(d.canonical)] = d.canonical;
+      (d.aliases || []).forEach(function (a) {
+        if (a) DEPT_LOOKUP[cleanName(a)] = d.canonical;
+      });
+    });
+  }
+
+  function loadDeptLib() {
+    if (DEPT_LIB) return Promise.resolve(DEPT_LIB);
+    return fetch('dept_alias.json')
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        DEPT_LIB = data.departments || [];
+        buildDeptLookup(DEPT_LIB);
+        return DEPT_LIB;
+      })
+      .catch(function () { DEPT_LIB = []; return []; });
+  }
+
+  /** 院系名归一：精确 → 别名 → 去后缀 → 包含匹配 → 未匹配 */
   function normalizeDept(name) {
-    var d = String(name || '').replace(/\s|　/g, '').trim();
-    if (!d) return '（未填院系）';
-    return DEPT_ALIAS[d] || d;
+    var raw = String(name || '').trim();
+    if (!raw) return '（未填院系）';
+    var key = cleanName(raw);
+
+    if (DEPT_LOOKUP[key]) return DEPT_LOOKUP[key];
+
+    // 去后缀再试（XX学院 / XX系 / XX研究院 / XX所）
+    var base = key.replace(/(学院|研究院|学系|系|所)$/,'');
+    if (base && DEPT_LOOKUP[base]) return DEPT_LOOKUP[base];
+
+    // 包含匹配：库里某个写法被包含，或包含库里写法（长度差≤4才认）
+    var hit = null;
+    Object.keys(DEPT_LOOKUP).forEach(function (k) {
+      if (hit || !k) return;
+      if (Math.abs(k.length - base.length) > 4) return;
+      if (key.indexOf(k) >= 0 || k.indexOf(base) >= 0) hit = DEPT_LOOKUP[k];
+    });
+    if (hit) return hit;
+
+    DEPT_UNKNOWN[raw] = (DEPT_UNKNOWN[raw] || 0) + 1;
+    return raw;   // 未匹配：保留原文，不猜测
   }
 
   /** 两级聚合：院系 → 支队；返回 [{dept,total,squads:[{place,amount,leader,cert,proj,projId,selfPay}]}] */
@@ -411,7 +437,8 @@
     setStatus('⏳ 正在读取「' + esc(sheet) + '」并按院系整理…');
 
     var g;
-    callKdocs({ action: 'export', sheet: sheet }).then(function (res) {
+    DEPT_UNKNOWN = {};
+    loadDeptLib().then(function () { return callKdocs({ action: 'export', sheet: sheet }); }).then(function (res) {
       var rows = res.rows || [];
       if (!rows.length) throw new Error('表里读不到数据行');
       g = buildDetailGrid(buildDeptRows(rows), sheet);
@@ -422,7 +449,10 @@
       }, { note: true });   // 写进「拨付说明」文件（同名工作表自动覆盖）
     }).then(function () {
       try { downloadSummaryXlsx(g); } catch (e) { /* 下载失败不影响金山写入 */ }
-      setStatus('✅ 已在「拨付说明」文件里生成「' + g.sheetName + '」，并已下载同名 xlsx。\n按院系分组、每个支队一行、相同内容自动合并；（同名工作表已覆盖）', '#1a7f37');
+      var unknown = Object.keys(DEPT_UNKNOWN);
+      var tip = unknown.length ? ('\n⚠ 有 ' + unknown.length + ' 个院系名未匹配别名库（已按原文分组）：' + unknown.join('、') +
+        '\n   可把它们补进 dept_alias.json 的 aliases 里') : '';
+      setStatus('✅ 已在「拨付说明」文件里生成「' + g.sheetName + '」，并已下载同名 xlsx。\n按院系分组、每个支队一行、相同内容自动合并；（同名工作表已覆盖）' + tip, '#1a7f37');
     }).catch(function (e) {
       setStatus('❌ 汇总失败：' + esc(e.message), '#b3261e');
     }).finally(function () {
