@@ -855,7 +855,8 @@ if (typeof document !== "undefined") {
           action: "syncBudgetGrid",
           sheetName: sheetName,
           cols: g.cols, rows: g.rows, merges: g.merges,
-          cells: g.cells, styles: g.styles, ncols: g.ncols
+          cells: g.cells, styles: g.styles, ncols: g.ncols,
+          total: totalAB, teams: computed.length
         });
         info.textContent = `✅ 已原样写入金山工作表「${r && r.sheet ? r.sheet : sheetName}」（${r.rows} 行 × ${r.cols} 列，含列宽/行高/合并）`;
         if (window.SJ_OVERVIEW) window.SJ_OVERVIEW.load();
