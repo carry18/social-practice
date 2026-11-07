@@ -231,6 +231,7 @@
       setStatus(isLink
         ? '✅ 已创建在线 Excel：<a href="' + esc(result) + '" target="_blank">' + esc(result) + '</a>\n请打开补全：打款院系 / 打款金额 / 负责人 / 工作证号 / 项目名称 / 项目编号。'
         : '✅ ' + esc(String(result)) + '\n请到打款汇总的金山文档表格查看新工作表，并补全：打款院系 / 打款金额 / 负责人 / 工作证号 / 项目名称 / 项目编号。', 'ok');
+      if (window.SJ_OVERVIEW) window.SJ_OVERVIEW.load();
     }).catch(function (e) {
       setStatus('❌ 调用失败：' + esc(e.message) +
         '\n可先点击「下载本地 xlsx 备份」，再手动上传到金山文档。', 'err');

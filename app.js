@@ -858,6 +858,7 @@ if (typeof document !== "undefined") {
           cells: g.cells, styles: g.styles, ncols: g.ncols
         });
         info.textContent = `✅ 已原样写入金山工作表「${r && r.sheet ? r.sheet : sheetName}」（${r.rows} 行 × ${r.cols} 列，含列宽/行高/合并）`;
+        if (window.SJ_OVERVIEW) window.SJ_OVERVIEW.load();
         return;
       } catch (e) {
         info.textContent = "原样写入失败，改用精简格式…（" + e.message + "）";
@@ -881,6 +882,7 @@ if (typeof document !== "undefined") {
         total: fmtNum(sumBy("AB"))
       });
       info.textContent = `✅ 已写入金山工作表「${r && r.sheet ? r.sheet : sheetName}」（${computed.length} 支队，合计 ${fmtNum(totalAB)} 元）`;
+      if (window.SJ_OVERVIEW) window.SJ_OVERVIEW.load();
     } catch (e) {
       info.textContent = "❌ 同步失败：" + e.message + "（请确认云函数已配 KDOCS_WEBHOOK_BUDGET）";
     } finally {

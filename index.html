@@ -39,6 +39,13 @@
   table.ov tbody tr { cursor: pointer; }
   table.ov tbody tr:hover { background: #fbf7fd; }
   table.ov tr.detail td { background: #fcfcfc; font-size: 12px; }
+  #ov-summary { overflow-x: auto; }
+  #ov-summary table.ov th, #ov-summary table.ov td { text-align: center; }
+  #ov-summary table.ov th:first-child, #ov-summary table.ov td:first-child { text-align: left; }
+  #ov-summary table.ov tfoot td { font-weight: 600; background: #faf7fc; }
+  #ov-summary table.ov tbody tr { cursor: default; }
+  #ov-summary table.ov tbody tr:hover { background: transparent; }
+  #ov-summary table.ov thead tr:first-child th { border-bottom: 1px solid #e2d6ea; }
   .pos { color: #1a7f37; } .neg { color: #b3261e; }
   .card { background: #fff; border: 1px solid #e5e5e5; border-radius: 10px;
           padding: 20px 24px; margin-bottom: 20px; }
@@ -164,6 +171,13 @@
 
   <!-- ================= 模块一：总览监控 ================= -->
   <section id="view-overview">
+    <div class="card">
+      <h2>预算 / 决算汇总</h2>
+      <p class="hint">按年份和期次汇总，第一列年份；预算取 L 列「预算额」，决算取 K 列「决算金额」。
+        每次上传决算表或同步预算后会刷新，也可点下方「刷新数据」。</p>
+      <div id="ov-summary"><p class="hint">正在读取…</p></div>
+    </div>
+
     <div class="card">
       <h2>历年预算 vs 决算</h2>
       <p class="hint">数据来自金山打款汇总表里所有「名字含『决算』」的工作表（现在有 <span id="ov-src">—</span>）。
@@ -333,10 +347,10 @@
   show(last || 'overview');
 })();
 </script>
-<script src="overview.js?v=20261105m"></script>
-<script src="app.js?v=20261112"></script>
+<script src="overview.js?v=20261113"></script>
+<script src="app.js?v=20261113"></script>
 <script src="enterprise.js?v=20261112"></script>
-<script src="payout.js?v=20261105m"></script>
+<script src="payout.js?v=20261113"></script>
 <script src="note.js?v=20261105m"></script>
 </body>
 </html>

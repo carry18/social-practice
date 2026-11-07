@@ -44,7 +44,71 @@
     return rows.reduce(function (t, r) { return t + num(r[key]); }, 0);
   }
 
+  function parsePeriod(sheet) {
+    var s = String(sheet || "");
+    var ym = s.match(/(20\d{2})/);
+    var year = ym ? ym[1] : "未识别";
+    var term = "其他";
+    if (/春季学期中/.test(s) || /春季/.test(s)) term = "春季学期中";
+    else if (/秋季学期中/.test(s) || /秋季/.test(s)) term = "秋季学期中";
+    else if (/寒假/.test(s)) term = "寒假";
+    else if (/暑假|暑期/.test(s)) term = "暑假";
+    return { year: year, term: term };
+  }
+
+  function renderSummary(data) {
+    var el = $("ov-summary");
+    if (!el) return;
+    var TERMS = ["春季学期中", "秋季学期中", "寒假", "暑假"];
+    var map = {}, hasOther = false;
+    data.forEach(function (g) {
+      var p = parsePeriod(g.sheet);
+      var rows = (g.rows || []).filter(function (r) { return num(r.actual) || num(r.budget); });
+      if (!rows.length) return;
+      if (p.term === "其他") hasOther = true;
+      if (!map[p.year]) map[p.year] = {};
+      var cell = map[p.year][p.term] || (map[p.year][p.term] = { b: 0, a: 0, n: 0 });
+      cell.b += sum(rows, "budget");
+      cell.a += sum(rows, "actual");
+      cell.n += rows.length;
+    });
+    var years = Object.keys(map).sort(function (a, b) {
+      if (a === "未识别") return 1;
+      if (b === "未识别") return -1;
+      return b.localeCompare(a);
+    });
+    if (!years.length) {
+      el.innerHTML = '<p class="hint">暂无预算/决算数据。</p>';
+      return;
+    }
+    var terms = TERMS.slice();
+    if (hasOther) terms.push("其他");
+    var head = '<tr><th rowspan="2">年份</th>' +
+      terms.map(function (t) { return '<th colspan="2">' + t + '</th>'; }).join("") +
+      '<th colspan="2">合计</th></tr>';
+    var sub = '<tr>' + terms.map(function () { return '<th>预算</th><th>决算</th>'; }).join("") +
+      '<th>预算</th><th>决算</th></tr>';
+    var totals = {}, grandB = 0, grandA = 0;
+    terms.forEach(function (t) { totals[t] = { b: 0, a: 0 }; });
+    var body = years.map(function (y) {
+      var row = map[y], tb = 0, ta = 0;
+      var cells = terms.map(function (t) {
+        var c = row[t];
+        if (c) { tb += c.b; ta += c.a; totals[t].b += c.b; totals[t].a += c.a; }
+        return '<td>' + (c ? fmt(c.b) : "—") + '</td><td>' + (c ? fmt(c.a) : "—") + '</td>';
+      }).join("");
+      grandB += tb; grandA += ta;
+      return '<tr><td>' + esc(y) + '</td>' + cells + '<td>' + fmt(tb) + '</td><td>' + fmt(ta) + '</td></tr>';
+    }).join("");
+    var foot = '<tr><td>合计</td>' +
+      terms.map(function (t) { return '<td>' + fmt(totals[t].b) + '</td><td>' + fmt(totals[t].a) + '</td>'; }).join("") +
+      '<td>' + fmt(grandB) + '</td><td>' + fmt(grandA) + '</td></tr>';
+    el.innerHTML = '<table class="ov ov-summary"><thead>' + head + sub + '</thead><tbody>' +
+      body + '</tbody><tfoot>' + foot + '</tfoot></table>';
+  }
+
   function render(data) {
+    renderSummary(data);
     var srcNames = data.map(function (x) { return x.sheet; });
     $('ov-src').textContent = srcNames.length ? srcNames.join('、') : '暂无';
 
@@ -114,6 +178,7 @@
         '（若提示未更新，请把最新 create_payout_sheet.js 贴到打款表脚本里）';
       $('ov-body').innerHTML = '';
       $('ov-stats').innerHTML = '';
+      if ($('ov-summary')) $('ov-summary').innerHTML = '<p class="hint">读取失败，无法汇总。</p>';
     }).finally(function () { loading = false; });
   }
 
