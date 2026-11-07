@@ -107,8 +107,84 @@
       body + '</tbody><tfoot>' + foot + '</tfoot></table>';
   }
 
+  var lastData = [];
+  var chart = null;
+
+  function chartTerm() {
+    var sel = $("ov-chart-term");
+    return sel ? sel.value : "全部";
+  }
+
+  function renderChart(data) {
+    var el = $("ov-chart");
+    if (!el) return;
+    var term = chartTerm();
+    var note = $("ov-chart-note");
+    if (note) note.textContent = term === "全部" ? "按年度合计：预算 vs 决算" : "仅看 " + term;
+    if (!window.echarts) {
+      el.innerHTML = '<p class="hint">图表库未加载，表格仍可查看。</p>';
+      return;
+    }
+    var map = {};
+    (data || []).forEach(function (g) {
+      var p = parsePeriod(g.sheet);
+      if (term !== "全部" && p.term !== term) return;
+      var rows = (g.rows || []).filter(function (r) { return num(r.actual) || num(r.budget); });
+      if (!rows.length) return;
+      if (!map[p.year]) map[p.year] = { b: 0, a: 0 };
+      map[p.year].b += sum(rows, "budget");
+      map[p.year].a += sum(rows, "actual");
+    });
+    var years = Object.keys(map).filter(function (y) { return y !== "未识别"; })
+      .sort(function (a, b) { return Number(a) - Number(b); });
+    if (map["未识别"]) years.push("未识别");
+    if (!years.length) {
+      if (chart) { chart.dispose(); chart = null; }
+      el.innerHTML = '<p class="hint">暂无数据。</p>';
+      return;
+    }
+    var budget = [], actual = [], diff = [];
+    years.forEach(function (y) {
+      budget.push(map[y].b);
+      actual.push(map[y].a);
+      diff.push(Math.round((map[y].a - map[y].b) * 100) / 100);
+    });
+    if (!chart) {
+      el.innerHTML = "";
+      chart = window.echarts.init(el);
+    }
+    chart.setOption({
+      tooltip: {
+        trigger: "axis",
+        axisPointer: { type: "shadow" },
+        valueFormatter: function (v) { return fmt(v) + " 元"; }
+      },
+      legend: { data: ["预算", "决算", "差额"], top: 0 },
+      grid: { left: 64, right: 28, top: 42, bottom: 34 },
+      xAxis: { type: "category", data: years, axisLabel: { interval: 0 } },
+      yAxis: {
+        type: "value", name: "元",
+        axisLabel: {
+          formatter: function (v) {
+            return Math.abs(v) >= 10000 ? (v / 10000).toFixed(1) + "万" : v;
+          }
+        }
+      },
+      series: [
+        { name: "预算", type: "bar", data: budget, barMaxWidth: 42,
+          itemStyle: { color: "#6f2d91" } },
+        { name: "决算", type: "bar", data: actual, barMaxWidth: 42,
+          itemStyle: { color: "#2f9e6f" } },
+        { name: "差额", type: "line", data: diff, symbol: "circle", symbolSize: 7,
+          lineStyle: { color: "#c77c1e" }, itemStyle: { color: "#c77c1e" } }
+      ]
+    }, true);
+  }
+
   function render(data) {
+    lastData = data;
     renderSummary(data);
+    renderChart(data);
     var srcNames = data.map(function (x) { return x.sheet; });
     $('ov-src').textContent = srcNames.length ? srcNames.join('、') : '暂无';
 
@@ -179,6 +255,8 @@
       $('ov-body').innerHTML = '';
       $('ov-stats').innerHTML = '';
       if ($('ov-summary')) $('ov-summary').innerHTML = '<p class="hint">读取失败，无法汇总。</p>';
+      if (chart) { chart.dispose(); chart = null; }
+      if ($('ov-chart')) $('ov-chart').innerHTML = '<p class="hint">读取失败，无法绘图。</p>';
     }).finally(function () { loading = false; });
   }
 
@@ -186,6 +264,9 @@
 
   var btn = $('ov-refresh');
   if (btn) btn.onclick = load;
+  var termSel = $('ov-chart-term');
+  if (termSel) termSel.onchange = function () { renderChart(lastData); };
+  window.addEventListener('resize', function () { if (chart) chart.resize(); });
 
   // 首屏若停在总览，自动加载一次
   var view = $('view-overview');

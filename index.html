@@ -179,6 +179,23 @@
     </div>
 
     <div class="card">
+      <h2>预决算趋势</h2>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">
+        <label class="hint">期次
+          <select id="ov-chart-term" style="padding:4px 6px;font-size:12px">
+            <option value="全部">全部期次</option>
+            <option value="春季学期中">春季学期中</option>
+            <option value="秋季学期中">秋季学期中</option>
+            <option value="寒假">寒假</option>
+            <option value="暑假">暑假</option>
+          </select>
+        </label>
+        <span id="ov-chart-note" class="hint"></span>
+      </div>
+      <div id="ov-chart" style="width:100%;height:360px"></div>
+    </div>
+
+    <div class="card">
       <h2>历年预算 vs 决算</h2>
       <p class="hint">数据来自金山打款汇总表里所有「名字含『决算』或『打款』」的工作表（现在有 <span id="ov-src">—</span>）。
         预算取 L 列「预算额」，决算取 K 列「决算金额」。</p>
@@ -347,7 +364,8 @@
   show(last || 'overview');
 })();
 </script>
-<script src="overview.js?v=20261113"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<script src="overview.js?v=20261116"></script>
 <script src="app.js?v=20261115"></script>
 <script src="enterprise.js?v=20261112"></script>
 <script src="payout.js?v=20261114"></script>
