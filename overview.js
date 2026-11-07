@@ -1,22 +1,30 @@
 /**
- * 总览监控：从金山「决算」类工作表读取预算与决算数据，做对比统计
- * 依赖 AirScript action = exportBudget（打款汇总表里的脚本）
+ * 总览监控：预算文档「预算汇总」+ 决算文档「决算汇总」→ 年×期次表 + 趋势图。
+ * 不再读取原始 v1 决算明细工作表。
  */
 (function () {
-  var DEFAULT_HOOK = 'https://1386267309-3bh6z757na.ap-shanghai.tencentscf.com';
+  var FINAL_HOOK = 'https://1386267309-3bh6z757na.ap-shanghai.tencentscf.com';
+  var BUDGET_HOOK = 'https://1386267309-3bh6z757na.ap-shanghai.tencentscf.com';
 
   function $(id) { return document.getElementById(id); }
 
-  function callKdocs(argv) {
-    return fetch(DEFAULT_HOOK, {
+  function callHook(hook, target, argv) {
+    var body = { Context: { argv: argv } };
+    if (target) body.target = target;
+    return fetch(hook, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ Context: { argv: argv } })
-    }).then(function (r) { return r.json(); }).then(function (d) {
-      if (d.error) throw new Error(d.error);
-      return d.data && d.data.result;
+      body: JSON.stringify(body)
+    }).then(function (resp) {
+      return resp.json().then(function (data) { return { ok: resp.ok, data: data }; });
+    }).then(function (r) {
+      if (!r.ok || r.data.error) throw new Error(r.data.error || ('HTTP ' + (r.ok ? 200 : 'error')));
+      return (r.data.data && r.data.data.result) || [];
     });
   }
+
+  function callFinal(argv) { return callHook(FINAL_HOOK, '', argv); }
+  function callBudget(argv) { return callHook(BUDGET_HOOK, 'budget', argv); }
 
   function num(v) {
     var n = parseFloat(String(v == null ? '' : v).replace(/[^\d.\-]/g, ''));
@@ -40,104 +48,134 @@
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
-  function sum(rows, key) {
-    return rows.reduce(function (t, r) { return t + num(r[key]); }, 0);
+  function safe(p) {
+    return p.then(function (v) { return { v: v }; })
+      .catch(function (e) { return { e: e }; });
   }
 
-  function parsePeriod(sheet) {
-    var s = String(sheet || "");
-    var ym = s.match(/(20\d{2})/);
-    var year = ym ? ym[1] : "未识别";
-    var term = "其他";
-    if (/春季学期中/.test(s) || /春季/.test(s)) term = "春季学期中";
-    else if (/秋季学期中/.test(s) || /秋季/.test(s)) term = "秋季学期中";
-    else if (/寒假/.test(s)) term = "寒假";
-    else if (/暑假|暑期/.test(s)) term = "暑假";
-    return { year: year, term: term };
+  function combine(budgetRows, finalRows) {
+    var map = {};
+    function add(rows, kind) {
+      (rows || []).forEach(function (r) {
+        var year = String(r.year || '未识别');
+        var term = String(r.term || '其他');
+        var key = year + '|' + term;
+        var c = map[key] || (map[key] = {
+          year: year, term: term, b: 0, a: 0, tb: 0, ta: 0, hasB: false, hasA: false
+        });
+        if (kind === 'b') {
+          c.b += num(r.amount); c.tb += num(r.teams); c.hasB = true;
+        } else {
+          c.a += num(r.amount); c.ta += num(r.teams); c.hasA = true;
+        }
+      });
+    }
+    add(budgetRows, 'b');
+    add(finalRows, 'a');
+    return Object.keys(map).map(function (k) { return map[k]; }).sort(function (x, y) {
+      if (x.year === '未识别') return 1;
+      if (y.year === '未识别') return -1;
+      return y.year.localeCompare(x.year);
+    });
   }
 
-  function renderSummary(data) {
-    var el = $("ov-summary");
+  function renderStats(rows) {
+    var budget = 0, actual = 0, teams = 0;
+    rows.forEach(function (r) {
+      budget += r.b;
+      actual += r.a;
+      teams += Math.max(r.tb, r.ta);
+    });
+    var diff = actual - budget;
+    $('ov-stats').innerHTML =
+      '<div class="stat"><div class="k">期次</div><div class="v">' + rows.length + '</div></div>' +
+      '<div class="stat"><div class="k">支队数</div><div class="v">' + teams + '</div></div>' +
+      '<div class="stat"><div class="k">预算合计</div><div class="v">' + fmt(budget) + '</div></div>' +
+      '<div class="stat"><div class="k">决算合计</div><div class="v">' + fmt(actual) + '</div></div>' +
+      '<div class="stat"><div class="k">差额（决算−预算）</div><div class="v ' +
+        (diff > 0 ? 'neg' : 'pos') + '">' + (diff > 0 ? '+' : '') + fmt(diff) +
+        '　' + pct(actual, budget) + '</div></div>';
+  }
+
+  var TERMS = ['春季学期中', '秋季学期中', '寒假', '暑假'];
+
+  function renderSummary(rows) {
+    var el = $('ov-summary');
     if (!el) return;
-    var TERMS = ["春季学期中", "秋季学期中", "寒假", "暑假"];
-    var map = {}, hasOther = false;
-    data.forEach(function (g) {
-      var p = parsePeriod(g.sheet);
-      var rows = (g.rows || []).filter(function (r) { return num(r.actual) || num(r.budget); });
-      if (!rows.length) return;
-      if (p.term === "其他") hasOther = true;
-      if (!map[p.year]) map[p.year] = {};
-      var cell = map[p.year][p.term] || (map[p.year][p.term] = { b: 0, a: 0, n: 0 });
-      cell.b += sum(rows, "budget");
-      cell.a += sum(rows, "actual");
-      cell.n += rows.length;
-    });
-    var years = Object.keys(map).sort(function (a, b) {
-      if (a === "未识别") return 1;
-      if (b === "未识别") return -1;
-      return b.localeCompare(a);
-    });
-    if (!years.length) {
-      el.innerHTML = '<p class="hint">暂无预算/决算数据。</p>';
+    if (!rows.length) {
+      el.innerHTML = '<p class="hint">暂无预算/决算汇总数据。请先在预算/决算文档里保存一次，或确认金山脚本已更新。</p>';
       return;
     }
+    var hasOther = rows.some(function (r) { return r.term === '其他'; });
     var terms = TERMS.slice();
-    if (hasOther) terms.push("其他");
-    var head = '<tr><th rowspan="2">年份</th>' +
-      terms.map(function (t) { return '<th colspan="2">' + t + '</th>'; }).join("") +
-      '<th colspan="2">合计</th></tr>';
-    var sub = '<tr>' + terms.map(function () { return '<th>预算</th><th>决算</th>'; }).join("") +
-      '<th>预算</th><th>决算</th></tr>';
+    if (hasOther) terms.push('其他');
+    var byYear = {};
+    rows.forEach(function (r) {
+      if (!byYear[r.year]) byYear[r.year] = {};
+      byYear[r.year][r.term] = r;
+    });
+    var years = Object.keys(byYear).sort(function (a, b) {
+      if (a === '未识别') return 1;
+      if (b === '未识别') return -1;
+      return b.localeCompare(a);
+    });
     var totals = {}, grandB = 0, grandA = 0;
     terms.forEach(function (t) { totals[t] = { b: 0, a: 0 }; });
+    var head = '<tr><th rowspan="2">年份</th>' +
+      terms.map(function (t) { return '<th colspan="2">' + t + '</th>'; }).join('') +
+      '<th colspan="2">合计</th></tr>';
+    var sub = '<tr>' + terms.map(function () { return '<th>预算</th><th>决算</th>'; }).join('') +
+      '<th>预算</th><th>决算</th></tr>';
     var body = years.map(function (y) {
-      var row = map[y], tb = 0, ta = 0;
+      var row = byYear[y], tb = 0, ta = 0;
       var cells = terms.map(function (t) {
         var c = row[t];
-        if (c) { tb += c.b; ta += c.a; totals[t].b += c.b; totals[t].a += c.a; }
-        return '<td>' + (c ? fmt(c.b) : "—") + '</td><td>' + (c ? fmt(c.a) : "—") + '</td>';
-      }).join("");
+        if (c) {
+          if (c.hasB) { tb += c.b; totals[t].b += c.b; }
+          if (c.hasA) { ta += c.a; totals[t].a += c.a; }
+        }
+        return '<td>' + (c && c.hasB ? fmt(c.b) : '—') + '</td>' +
+               '<td>' + (c && c.hasA ? fmt(c.a) : '—') + '</td>';
+      }).join('');
       grandB += tb; grandA += ta;
-      return '<tr><td>' + esc(y) + '</td>' + cells + '<td>' + fmt(tb) + '</td><td>' + fmt(ta) + '</td></tr>';
-    }).join("");
+      return '<tr><td>' + esc(y) + '</td>' + cells +
+        '<td>' + fmt(tb) + '</td><td>' + fmt(ta) + '</td></tr>';
+    }).join('');
     var foot = '<tr><td>合计</td>' +
-      terms.map(function (t) { return '<td>' + fmt(totals[t].b) + '</td><td>' + fmt(totals[t].a) + '</td>'; }).join("") +
+      terms.map(function (t) { return '<td>' + fmt(totals[t].b) + '</td><td>' + fmt(totals[t].a) + '</td>'; }).join('') +
       '<td>' + fmt(grandB) + '</td><td>' + fmt(grandA) + '</td></tr>';
     el.innerHTML = '<table class="ov ov-summary"><thead>' + head + sub + '</thead><tbody>' +
       body + '</tbody><tfoot>' + foot + '</tfoot></table>';
   }
 
-  var lastData = [];
+  var lastRows = [];
   var chart = null;
 
   function chartTerm() {
-    var sel = $("ov-chart-term");
-    return sel ? sel.value : "全部";
+    var sel = $('ov-chart-term');
+    return sel ? sel.value : '全部';
   }
 
-  function renderChart(data) {
-    var el = $("ov-chart");
+  function renderChart(rows) {
+    var el = $('ov-chart');
     if (!el) return;
     var term = chartTerm();
-    var note = $("ov-chart-note");
-    if (note) note.textContent = term === "全部" ? "按年度合计：预算 vs 决算" : "仅看 " + term;
+    var note = $('ov-chart-note');
+    if (note) note.textContent = term === '全部' ? '按年度合计：预算 vs 决算' : '仅看 ' + term;
     if (!window.echarts) {
       el.innerHTML = '<p class="hint">图表库未加载，表格仍可查看。</p>';
       return;
     }
     var map = {};
-    (data || []).forEach(function (g) {
-      var p = parsePeriod(g.sheet);
-      if (term !== "全部" && p.term !== term) return;
-      var rows = (g.rows || []).filter(function (r) { return num(r.actual) || num(r.budget); });
-      if (!rows.length) return;
-      if (!map[p.year]) map[p.year] = { b: 0, a: 0 };
-      map[p.year].b += sum(rows, "budget");
-      map[p.year].a += sum(rows, "actual");
+    (rows || []).forEach(function (r) {
+      if (term !== '全部' && r.term !== term) return;
+      if (!map[r.year]) map[r.year] = { b: 0, a: 0 };
+      map[r.year].b += r.b;
+      map[r.year].a += r.a;
     });
-    var years = Object.keys(map).filter(function (y) { return y !== "未识别"; })
+    var years = Object.keys(map).filter(function (y) { return y !== '未识别'; })
       .sort(function (a, b) { return Number(a) - Number(b); });
-    if (map["未识别"]) years.push("未识别");
+    if (map['未识别']) years.push('未识别');
     if (!years.length) {
       if (chart) { chart.dispose(); chart = null; }
       el.innerHTML = '<p class="hint">暂无数据。</p>';
@@ -150,93 +188,44 @@
       diff.push(Math.round((map[y].a - map[y].b) * 100) / 100);
     });
     if (!chart) {
-      el.innerHTML = "";
+      el.innerHTML = '';
       chart = window.echarts.init(el);
     }
     chart.setOption({
       tooltip: {
-        trigger: "axis",
-        axisPointer: { type: "shadow" },
-        valueFormatter: function (v) { return fmt(v) + " 元"; }
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' },
+        valueFormatter: function (v) { return fmt(v) + ' 元'; }
       },
-      legend: { data: ["预算", "决算", "差额"], top: 0 },
+      legend: { data: ['预算', '决算', '差额'], top: 0 },
       grid: { left: 64, right: 28, top: 42, bottom: 34 },
-      xAxis: { type: "category", data: years, axisLabel: { interval: 0 } },
+      xAxis: { type: 'category', data: years, axisLabel: { interval: 0 } },
       yAxis: {
-        type: "value", name: "元",
+        type: 'value', name: '元',
         axisLabel: {
           formatter: function (v) {
-            return Math.abs(v) >= 10000 ? (v / 10000).toFixed(1) + "万" : v;
+            return Math.abs(v) >= 10000 ? (v / 10000).toFixed(1) + '万' : v;
           }
         }
       },
       series: [
-        { name: "预算", type: "bar", data: budget, barMaxWidth: 42,
-          itemStyle: { color: "#6f2d91" } },
-        { name: "决算", type: "bar", data: actual, barMaxWidth: 42,
-          itemStyle: { color: "#2f9e6f" } },
-        { name: "差额", type: "line", data: diff, symbol: "circle", symbolSize: 7,
-          lineStyle: { color: "#c77c1e" }, itemStyle: { color: "#c77c1e" } }
+        { name: '预算', type: 'bar', data: budget, barMaxWidth: 42,
+          itemStyle: { color: '#6f2d91' } },
+        { name: '决算', type: 'bar', data: actual, barMaxWidth: 42,
+          itemStyle: { color: '#2f9e6f' } },
+        { name: '差额', type: 'line', data: diff, symbol: 'circle', symbolSize: 7,
+          lineStyle: { color: '#c77c1e' }, itemStyle: { color: '#c77c1e' } }
       ]
     }, true);
   }
 
-  function render(data) {
-    lastData = data;
-    renderSummary(data);
-    renderChart(data);
-    var srcNames = data.map(function (x) { return x.sheet; });
-    $('ov-src').textContent = srcNames.length ? srcNames.join('、') : '暂无';
-
-    var all = [];
-    data.forEach(function (x) { all = all.concat(x.rows || []); });
-
-    var budget = sum(all, 'budget');
-    var actual = sum(all, 'actual');
-    var diff = actual - budget;
-
-    $('ov-stats').innerHTML =
-      '<div class="stat"><div class="k">期次</div><div class="v">' + data.length + '</div></div>' +
-      '<div class="stat"><div class="k">支队数</div><div class="v">' + all.length + '</div></div>' +
-      '<div class="stat"><div class="k">预算合计</div><div class="v">' + fmt(budget) + '</div></div>' +
-      '<div class="stat"><div class="k">决算合计</div><div class="v">' + fmt(actual) + '</div></div>' +
-      '<div class="stat"><div class="k">差额（决算−预算）</div><div class="v ' +
-        (diff > 0 ? 'neg' : 'pos') + '">' + (diff > 0 ? '+' : '') + fmt(diff) + '　' + pct(actual, budget) + '</div></div>';
-
-    if (!data.length) {
-      $('ov-body').innerHTML = '<p class="hint">金山里还没有名字含「决算」的工作表。</p>';
-      return;
-    }
-
-    var html = '';
-    data.forEach(function (group, gi) {
-      var rows = (group.rows || []).filter(function (r) { return num(r.actual) || num(r.budget); });
-      var b = sum(rows, 'budget'), a = sum(rows, 'actual');
-      html += '<div style="margin-top:18px">' +
-        '<h3 style="font-size:14px;margin:0 0 6px;color:var(--purple)">' + esc(group.sheet) +
-        '　<span class="hint" style="font-weight:normal">' + rows.length + ' 支队 · 预算 ' + fmt(b) +
-        ' · 决算 ' + fmt(a) + ' · 差额 ' + (a - b > 0 ? '+' : '') + fmt(a - b) + '</span></h3>' +
-        '<table class="ov"><thead><tr>' +
-        '<th>支队</th><th>人数</th><th>预算额</th><th>决算金额</th><th>差额</th><th>差额率</th><th>备注</th>' +
-        '</tr></thead><tbody>';
-      rows.filter(function (r) { return num(r.actual) || num(r.budget); }).forEach(function (r) {
-        var d = num(r.actual) - num(r.budget);
-        html += '<tr>' +
-          '<td>' + esc(r.place) + (r.squad ? '　<span class="hint">' + esc(r.squad) + (r.date ? ' ' + esc(r.date) : '') + '</span>' : '') + '</td>' +
-          '<td>' + esc(r.people) + '</td>' +
-          '<td>' + fmt(num(r.budget)) + '</td>' +
-          '<td>' + fmt(num(r.actual)) + '</td>' +
-          '<td class="' + (d > 0 ? 'neg' : 'pos') + '">' + (d > 0 ? '+' : '') + fmt(d) + '</td>' +
-          '<td>' + pct(num(r.actual), num(r.budget)) + '</td>' +
-          '<td style="text-align:left">' + esc(r.note) + '</td>' +
-          '</tr>';
-      });
-      html += '<tr><td><b>合计</b></td><td></td><td><b>' + fmt(b) + '</b></td><td><b>' + fmt(a) +
-        '</b></td><td><b>' + (a - b > 0 ? '+' : '') + fmt(a - b) + '</b></td><td><b>' + pct(a, b) +
-        '</b></td><td></td></tr>';
-      html += '</tbody></table></div>';
-    });
-    $('ov-body').innerHTML = html;
+  function render(budgetRows, finalRows, bErr, fErr) {
+    var rows = combine(budgetRows, finalRows);
+    lastRows = rows;
+    $('ov-src').textContent = '预算汇总 + 决算汇总';
+    renderStats(rows);
+    renderSummary(rows);
+    renderChart(rows);
   }
 
   var loading = false;
@@ -244,15 +233,23 @@
     if (loading) return;
     loading = true;
     var msg = $('ov-msg');
-    msg.textContent = '读取中…';
-    callKdocs({ action: 'exportBudget' }).then(function (data) {
-      if (!Array.isArray(data)) throw new Error('返回格式异常，请确认金山脚本已更新到最新版');
-      render(data);
-      msg.textContent = '更新于 ' + new Date().toLocaleTimeString('zh-CN');
+    if (msg) msg.textContent = '读取中…';
+    Promise.all([
+      safe(callFinal({ action: 'exportSummary', kind: 'final' })),
+      safe(callBudget({ action: 'exportSummary', kind: 'budget' }))
+    ]).then(function (res) {
+      var f = res[0].v, b = res[1].v;
+      if (res[0].e && res[1].e) {
+        throw new Error('预算汇总/决算汇总都读取失败：' + res[0].e.message + '；' + res[1].e.message);
+      }
+      render(b || [], f || [], res[1].e, res[0].e);
+      var errs = [];
+      if (res[0].e) errs.push('决算汇总');
+      if (res[1].e) errs.push('预算汇总');
+      if (msg) msg.textContent = '更新于 ' + new Date().toLocaleTimeString('zh-CN') +
+        (errs.length ? '；' + errs.join('/') + '未读取（脚本可能未更新）' : '');
     }).catch(function (e) {
-      msg.textContent = '读取失败：' + e.message +
-        '（若提示未更新，请把最新 create_payout_sheet.js 贴到打款表脚本里）';
-      $('ov-body').innerHTML = '';
+      if (msg) msg.textContent = '读取失败：' + e.message;
       $('ov-stats').innerHTML = '';
       if ($('ov-summary')) $('ov-summary').innerHTML = '<p class="hint">读取失败，无法汇总。</p>';
       if (chart) { chart.dispose(); chart = null; }
@@ -265,10 +262,9 @@
   var btn = $('ov-refresh');
   if (btn) btn.onclick = load;
   var termSel = $('ov-chart-term');
-  if (termSel) termSel.onchange = function () { renderChart(lastData); };
+  if (termSel) termSel.onchange = function () { renderChart(lastRows); };
   window.addEventListener('resize', function () { if (chart) chart.resize(); });
 
-  // 首屏若停在总览，自动加载一次
   var view = $('view-overview');
   if (view && !view.hidden) load();
 })();
