@@ -748,9 +748,20 @@ if (typeof document !== "undefined") {
 
   function applyTerm() {
     const y = $("doc-year").value || String(new Date().getFullYear());
-    const term = $("doc-term").value || "暑期";
+    const term = $("doc-term").value;
+    if (!term) {
+      $("doc-season").value = "";
+      $("doc-title").value = "清华学子地域行实践预算";
+      return;
+    }
     $("doc-season").value = y + "年" + term;                       // 2027年暑期
     $("doc-title").value = y + "年" + (TERM_TITLE[term] || term) + "“清华学子地域行”实践预算";
+  }
+
+  function resetTerm() {
+    const term = $("doc-term");
+    if (term) term.value = "";
+    applyTerm();
   }
 
   /* ---------- 同步预算到金山「预算」文件 ---------- */
@@ -788,6 +799,10 @@ if (typeof document !== "undefined") {
   }
 
   async function syncBudget() {
+    if (!(($("doc-term") || {}).value || "").trim()) {
+      alert("请先选择期次（寒假 / 暑期 / 春季学期中 / 秋季学期中），再同步到金山");
+      return;
+    }
     // 数据来源：优先用完整网格（上传的 / 记住的 / 网页刚生成的 30 列模板）
     const computed = lastComputed;
     if (!computed || !computed.length) {
@@ -859,6 +874,8 @@ if (typeof document !== "undefined") {
           total: totalAB, teams: computed.length
         });
         info.textContent = `✅ 已原样写入金山工作表「${r && r.sheet ? r.sheet : sheetName}」（${r.rows} 行 × ${r.cols} 列，含列宽/行高/合并）`;
+        resetTerm();
+        info.textContent += "；期次已清空，请重新选择";
         if (window.SJ_OVERVIEW) window.SJ_OVERVIEW.load();
         return;
       } catch (e) {
@@ -883,6 +900,8 @@ if (typeof document !== "undefined") {
         total: fmtNum(sumBy("AB"))
       });
       info.textContent = `✅ 已写入金山工作表「${r && r.sheet ? r.sheet : sheetName}」（${computed.length} 支队，合计 ${fmtNum(totalAB)} 元）`;
+      resetTerm();
+      info.textContent += "；期次已清空，请重新选择";
       if (window.SJ_OVERVIEW) window.SJ_OVERVIEW.load();
     } catch (e) {
       info.textContent = "❌ 同步失败：" + e.message + "（请确认云函数已配 KDOCS_WEBHOOK_BUDGET）";
@@ -929,12 +948,13 @@ if (typeof document !== "undefined") {
         H: ""
       }));
       renderEditor(); saveLocal(); invalidate();
+      resetTerm();
       if (lastUploadedGrid) {
         gridFromReadback = true;
         patchGridWithTeams(lastUploadedGrid, teams);
-        info.textContent = `✅ 已读回「${name}」的 ${rows.length} 支支队；同步时将按你上传的完整列模板写入`;
+        info.textContent = `✅ 已读回「${name}」的 ${rows.length} 支支队；同步时将按你上传的完整列模板写入；期次已清空，请重新选择`;
       } else {
-        info.textContent = `✅ 已读回「${name}」的 ${rows.length} 支支队（当前无完整模板，同步会是精简列；上传一次原表后即可全列写入）`;
+        info.textContent = `✅ 已读回「${name}」的 ${rows.length} 支支队（当前无完整模板，同步会是精简列；上传一次原表后即可全列写入）；期次已清空，请重新选择`;
       }
     } catch (e) {
       info.textContent = "读取失败：" + e.message;
@@ -950,6 +970,10 @@ if (typeof document !== "undefined") {
       const wb = buildWorkbook(computed);
       XLSX.writeFile(wb, `实践预算_${stamp}.xlsx`);
     } else {
+      if (!(($("doc-term") || {}).value || "").trim()) {
+        alert("请先选择期次（寒假 / 暑期 / 春季学期中 / 秋季学期中），再生成公文 Word");
+        return;
+      }
       try { if (window.EnterpriseData) await window.EnterpriseData.ensure(); } catch (e) { /* 用原始点位名 */ }
       const title = $("doc-title").value.trim() || "实践预算";
       const season = $("doc-season").value.trim() || "本期";
@@ -976,7 +1000,8 @@ if (typeof document !== "undefined") {
     if (!found.length) { $("upload-info").textContent = "未识别到支队行（需 B 列实践地点 + F 列人数为数字）"; return; }
     teams = found;
     saveLocal(); renderEditor(); invalidate();
-    $("upload-info").textContent = `已导入 ${found.length} 支支队（表：${name}），可切换到「手动填写」查看修改`;
+    resetTerm();
+    $("upload-info").textContent = `已导入 ${found.length} 支支队（表：${name}），可切换到「手动填写」查看修改；期次已清空，请重新选择`;
     $("tab-manual").click();
   }
 
@@ -1113,11 +1138,16 @@ if (typeof document !== "undefined") {
     const name = wb.SheetNames.includes("各支队预算按实际人数校准") ? "各支队预算按实际人数校准" : wb.SheetNames[0];
     const teams = teamsFromSheet(wb.Sheets[name], FARES);
     if (!teams.length) { $("docx-info").textContent = "未识别到支队数据行"; return; }
+    if (!(($("doc-term") || {}).value || "").trim()) {
+      $("docx-info").textContent = "请先选择期次（寒假 / 暑期 / 春季学期中 / 秋季学期中），再上传调整后的 xlsx";
+      return;
+    }
     const title = $("doc-title").value.trim() || "实践预算";
     const season = $("doc-season").value.trim() || "本期";
     try { if (window.EnterpriseData) await window.EnterpriseData.ensure(); } catch (e) { /* 用原始点位名 */ }
     const blob = await docx.Packer.toBlob(buildDocx(teams, title, season));
     downloadBlob(blob, `${title}.docx`);
+    resetTerm();
     lastUploaded = teams;
     lastUploadedGrid = extractGrid(wb.Sheets[name]);
     gridFromReadback = false;
@@ -1126,7 +1156,7 @@ if (typeof document !== "undefined") {
       localStorage.setItem("budgetGridTeams", JSON.stringify(teams));
     } catch (e) { /* 超配额就只在内存里用 */ }
     if ($("budget-sync")) $("budget-sync").disabled = false;   // 上传后也可直接同步
-    $("docx-info").textContent = `已按表内数值生成 Word（${teams.length} 支支队，表：${name}）；可点右侧按钮同步到金山`;
+    $("docx-info").textContent = `已按表内数值生成 Word（${teams.length} 支支队，表：${name}）；可点右侧按钮同步到金山；期次已清空，请重新选择`;
   }
 
   document.addEventListener("DOMContentLoaded", async () => {
