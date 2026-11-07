@@ -54,7 +54,7 @@
           '<span id="ent-sub-text"></span></div>' +
       '</div>' +
       '<div class="ent-search"><span>🔍</span>' +
-        '<input id="ent-q" placeholder="搜企业 / 集团 / 城市"></div>' +
+        '<input id="ent-q" placeholder="搜全称 / 简称 / 别名 / 集团"></div>' +
       '<div class="ent-chips">' +
         '<button class="ent-chip on" data-view="all">全部</button>' +
         '<button class="ent-chip mil" data-view="defense">军工</button>' +
@@ -196,7 +196,9 @@
     const q = state.q.toLowerCase();
     if (q) {
       list = list.filter(function (c) {
-        return (c.name + " " + c.raw + " " + c.group + " " + c.city + " " + c.province).toLowerCase().indexOf(q) >= 0;
+        const hay = [c.canonical_name, c.short_name, c.legal_name, c.raw, c.group, c.city, c.province]
+          .concat(c.aliases || []).join(" ").toLowerCase();
+        return hay.indexOf(q) >= 0;
       });
     }
     if (state.view === "defense") list = list.filter(function (c) { return c.defense; });
@@ -229,7 +231,9 @@
 
   function isAdded(c) {
     const parts = currentC().split(/[、,，]/).map(function (s) { return s.trim(); }).filter(Boolean);
-    return parts.indexOf(c.write_name) >= 0 || parts.indexOf(c.raw) >= 0 || parts.indexOf(c.name) >= 0;
+    return [c.write_name, c.legal_name, c.canonical_name, c.raw].some(function (x) {
+      return x && parts.indexOf(x) >= 0;
+    });
   }
 
   function insert(c) {
@@ -306,8 +310,11 @@
       const badge = c.defense ? '<span class="ent-badge">军工</span>' :
         (c.troops ? '<span class="ent-badge troop">部队</span>' : "");
       const region = [c.province, c.city].filter(Boolean).join(" · ");
+      const legal = (c.legal_name && c.legal_name !== c.canonical_name)
+        ? '<div class="ent-legal">' + esc(c.legal_name) + '</div>' : "";
       return '<div class="ent-card">' +
-        '<div class="ent-name"><span class="ent-nm">' + esc(c.name) + '</span>' + badge + '</div>' +
+        '<div class="ent-name"><span class="ent-nm">' + esc(c.canonical_name || c.name) + '</span>' + badge + '</div>' +
+        legal +
         '<div class="ent-meta">' + esc(c.group) + " · " + esc(c.level) +
           (region ? " · " + esc(region) : "") + '</div>' +
         '<div class="ent-foot"><span class="ent-src">' +

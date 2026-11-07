@@ -10,6 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT.parent / "企业台账" / "companies.csv"
+ALIASES = ROOT.parent / "企业台账" / "enterprise_aliases.csv"
 OUT = ROOT / "enterprise_index.json"
 
 DEFENSE = {
@@ -21,6 +22,8 @@ TROOPS = {"部队"}
 
 def main():
     rows = list(csv.DictReader(open(SRC, encoding="utf-8-sig", newline="")))
+    alias_rows = list(csv.DictReader(open(ALIASES, encoding="utf-8-sig", newline="")))
+    alias_map = {(a["单位名称"], a["集团"]): a for a in alias_rows}
     companies = []
     for r in rows:
         if r["是否具名单位"] != "是":
@@ -28,11 +31,21 @@ def main():
         if r["层级"] in ("部门", "服务商"):
             continue
         group = r["集团"]
-        display = r["展示名称"]
-        write_name = display.replace(" · ", " ") if " · " in display else r["单位名称"]
+        a = alias_map.get((r["单位名称"], group), {})
+        legal = a.get("法定全称", "")
+        canonical = a.get("规范名", "") or r["展示名称"]
+        short = a.get("简称", "") or canonical
+        aliases = [x for x in (a.get("别名", "") or "").split("|") if x]
+        name_status = a.get("状态", "")
+        write_name = legal or canonical.replace("·", " ")
         companies.append({
             "id": "c_%04d" % (len(companies) + 1),
-            "name": display,
+            "name": canonical,
+            "canonical_name": canonical,
+            "short_name": short,
+            "legal_name": legal,
+            "aliases": aliases,
+            "name_status": name_status,
             "raw": r["单位名称"],
             "write_name": write_name,
             "group": group,
