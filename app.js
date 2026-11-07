@@ -157,11 +157,40 @@ async function liveSegment(from, to) {
   } finally { clearTimeout(timer); }
 }
 
+const LIVE_CACHE_KEY = "fareLiveCacheV1";
+
+function todayStr(d) {
+  d = d || new Date();
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+
+function readLiveCache() {
+  try {
+    if (typeof localStorage === "undefined") return { date: todayStr(), items: {} };
+    const c = JSON.parse(localStorage.getItem(LIVE_CACHE_KEY) || "{}");
+    if (c && c.date === todayStr() && c.items) return c;
+  } catch (e) { /* ignore */ }
+  return { date: todayStr(), items: {} };
+}
+
+function writeLiveCache(cache) {
+  try {
+    if (typeof localStorage !== "undefined") localStorage.setItem(LIVE_CACHE_KEY, JSON.stringify(cache));
+  } catch (e) { /* quota/private mode */ }
+}
+
+function cacheEntry(cache, key) {
+  const rev = key.split("-").reverse().join("-");
+  return (cache.items && (cache.items[key] || cache.items[rev])) || null;
+}
+
 async function prefetchLive(valid, onProgress) {
   // 实时优先：链上所有分段都调云函数查最新价（3路并发）；失败的分段回落票价库快照（无快照才标失败）
   const segs = FARES.segments, meta = FARES.meta || (FARES.meta = {});
   const liveWanted = (typeof document === "undefined") ? true
     : (document.getElementById("live-first") && document.getElementById("live-first").checked);
+  const today = todayStr();
+  const cache = readLiveCache();
   const tasks = [], seen = new Set();
   for (const t of valid) {
     const toks = cityTokens(t.B, knownCities(FARES));
@@ -171,8 +200,18 @@ async function prefetchLive(valid, onProgress) {
       const key = `${chain[i]}-${chain[i + 1]}`, rev = `${chain[i + 1]}-${chain[i]}`;
       if (seen.has(key) || seen.has(rev)) continue;
       seen.add(key);
-      if (meta[key] && meta[key].live) continue;          // 本次会话已实时查过
-      if (meta[key] && meta[key].live_failed) continue;   // 实时查过且失败
+      const cached = cacheEntry(cache, key);
+      if (cached && cached.price > 0) {
+        segs[key] = cached.price;
+        meta[key] = { ...cached, live: true, cached: true };
+        continue;
+      }
+      if (meta[key] && meta[key].live && meta[key].query_date === today) continue;   // 本次会话当天已查
+      if (meta[key] && meta[key].query_date === today && segs[key] !== undefined) {  // 快照当天已查
+        meta[key] = { ...meta[key], cached: true };
+        continue;
+      }
+      if (meta[key] && meta[key].live_failed && meta[key].failed_date === today) continue;
       const hasSnap = segs[key] !== undefined || segs[rev] !== undefined;
       if (!liveWanted && hasSnap) continue;               // 快照模式：只补库外分段
       tasks.push([chain[i], chain[i + 1], key, hasSnap]);
@@ -184,13 +223,16 @@ async function prefetchLive(valid, onProgress) {
     onProgress && onProgress(`⏳ 实时查询票价（${++done}/${tasks.length}）${key}…`);
     try {
       const r = await liveSegment(a, b);
+      const entry = { price: r.price, train: r.train, query_date: r.query_date || today,
+                      window: r.window, days_queried: r.days_queried, at: Date.now() };
       segs[key] = r.price;
-      meta[key] = { train: r.train, query_date: r.query_date, window: r.window,
-                    days_queried: r.days_queried, live: true };
+      meta[key] = { ...entry, live: true };
+      cache.items[key] = entry;
+      writeLiveCache(cache);
     } catch (e) {
       if (hasSnap) fellBack.push(key);                    // 静默回落快照
       else {
-        meta[key] = { live_failed: true, note: String((e && e.message) || e) };
+        meta[key] = { live_failed: true, failed_date: today, note: String((e && e.message) || e) };
         failed.push(key);
       }
     }

@@ -20,25 +20,9 @@ DEFENSE = {
 }
 TROOPS = {"部队"}
 
-_DIGITS = "〇一二三四五六七八九"
-
-
-def cn_num(n):
-    if n < 10:
-        return _DIGITS[n]
-    if n < 20:
-        return "十" + (_DIGITS[n % 10] if n % 10 else "")
-    if n < 100:
-        return _DIGITS[n // 10] + "十" + (_DIGITS[n % 10] if n % 10 else "")
-    return "".join(_DIGITS[int(d)] for d in str(n))
-
-
 def formalize_name(s):
-    """公文口径：去间隔号；所/局编号用中文数字（14所→十四所，719所→七一九所）。"""
-    s = str(s or "").replace("·", "")
-    s = re.sub(r"(\d+)所", lambda m: cn_num(int(m.group(1))) + "所", s)
-    s = re.sub(r"(\d+)局", lambda m: cn_num(int(m.group(1))) + "局", s)
-    return s
+    """公文口径：只去掉间隔号，编号保留阿拉伯数字（14所、719所）。"""
+    return str(s or "").replace("·", "")
 
 
 def main():
