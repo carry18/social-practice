@@ -2,6 +2,8 @@
 (function () {
   if (typeof window === "undefined") return;
 
+  const DATA_VERSION = "20261108";
+
   const state = {
     open: false,
     row: -1,
@@ -123,7 +125,7 @@
     if (state.data || state.loading) return Promise.resolve();
     state.loading = true;
     state.error = "";
-    return fetch("enterprise_index.json", { cache: "no-cache" })
+    return fetch("enterprise_index.json?v=" + DATA_VERSION, { cache: "no-cache" })
       .then(function (r) {
         if (!r.ok) throw new Error("HTTP " + r.status);
         return r.json();
