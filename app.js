@@ -336,28 +336,42 @@ function buildWorkbook(computed) {
 
   // 注：对账区（过会金额/差额）仅内部 rebuild_budget.py 生成，网页版面向院系不附带
   const last = startRow + computed.length - 1;
+  const totalRow = last + 1;
+
+  // 合计行：30 列模板原来没有，补上后金山/网页都能直接看到期次合计
+  ws[`A${totalRow}`] = { t: "s", v: "合计" };
+  const sumDefs = [
+    ["F", "people"], ["H", "H"], ["K", "people"], ["M", "U"], ["O", "Y"],
+    ["Q", "AA"], ["R", "AB"], ["U", "U"], ["W", "W"], ["Y", "Y"],
+    ["AA", "AA"], ["AB", "AB"]
+  ];
+  for (const [col, field] of sumDefs) {
+    const sum = computed.reduce((a, t) => a + (Number(t[field]) || 0), 0);
+    setF(ws, `${col}${totalRow}`, `SUM(${col}${startRow}:${col}${last})`, sum);
+  }
 
   // 模板配色（与 预算表模板.xlsx 一致）：院系提供区橙、呈现列蓝、辅助列绿、T列输入高亮黄
   // 数据区全部自动换行+垂直居中，避免列宽不够文字挤在一起
   const FILL = { orange: "FFFFF2CC", blue: "FFD9E1F2", green: "FFE2EFDA", yellow: "FFFFE699" };
   const fillOf = (ci, r) => {
-    if (r === 1 || r === 6) return ci <= 8 ? FILL.orange : ci <= 19 ? FILL.blue : FILL.green;
+    if (r === 1 || r === 6 || r === totalRow) return ci <= 8 ? FILL.orange : ci <= 19 ? FILL.blue : FILL.green;
     if (r >= startRow && r <= last) {
       if (ci <= 8) return FILL.orange;
       if (ci === 20) return FILL.yellow;
     }
     return null;
   };
-  for (let r = 1; r <= last; r++) {
+  for (let r = 1; r <= totalRow; r++) {
     for (let ci = 1; ci <= 30; ci++) {
       const rgb = fillOf(ci, r);
-      const isHeader = r === 1 || r === 6, isData = r >= startRow;
-      if (!rgb && !isHeader && !isData) continue;
+      const isHeader = r === 1 || r === 6, isData = r >= startRow && r <= last;
+      const isTotal = r === totalRow;
+      if (!rgb && !isHeader && !isData && !isTotal) continue;
       const addr = `${colLetter(ci)}${r}`;
       if (!ws[addr]) ws[addr] = { t: "s", v: "" };
       const s = ws[addr].s || (ws[addr].s = {});
       if (rgb) s.fill = { patternType: "solid", fgColor: { rgb } };
-      if (isHeader) {
+      if (isHeader || isTotal) {
         s.font = { bold: true };
         s.alignment = { horizontal: "center", vertical: "center", wrapText: true };
       } else if (isData) {
@@ -366,11 +380,12 @@ function buildWorkbook(computed) {
     }
   }
 
-  ws["!ref"] = `A1:AD${last}`;
+  ws["!ref"] = `A1:AD${totalRow}`;
   ws["!merges"] = [
     { s: { r: 0, c: 0 }, e: { r: 0, c: 7 } },
     { s: { r: 0, c: 8 }, e: { r: 0, c: 18 } },
     { s: { r: 0, c: 19 }, e: { r: 0, c: 28 } },
+    { s: { r: totalRow - 1, c: 0 }, e: { r: totalRow - 1, c: 4 } },
   ];
   const cols = [];
   for (let i = 1; i <= 30; i++) cols.push({ wch: COL_W[colLetter(i)] || 11 });
