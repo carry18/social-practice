@@ -2,7 +2,7 @@
 (function () {
   if (typeof window === "undefined") return;
 
-  const DATA_VERSION = "20261109";
+  const DATA_VERSION = "20261110";
 
   const state = {
     open: false,
@@ -20,6 +20,8 @@
     fallback: false,
   };
 
+  let lookup = null;
+  let dataPromise = null;
   let panel = null;
   let listEl = null;
   let cityEl = null;
@@ -128,20 +130,73 @@
     toastTimer = setTimeout(function () { toastEl.classList.remove("show"); }, 1800);
   }
 
-  function load() {
-    if (state.data || state.loading) return Promise.resolve();
-    state.loading = true;
-    state.error = "";
-    return fetch("enterprise_index.json?v=" + DATA_VERSION, { cache: "no-cache" })
+  function normName(s) {
+    return String(s || "").replace(/\s+/g, "")
+      .replace(/[（）()·.,，、;；:：\-—_\/]/g, "").toLowerCase();
+  }
+
+  function buildLookup() {
+    lookup = new Map();
+    if (!state.data) return;
+    (state.data.companies || []).forEach(function (c) {
+      [c.raw, c.name, c.canonical_name, c.short_name, c.legal_name]
+        .concat(c.aliases || []).forEach(function (k) {
+          const n = normName(k);
+          if (n && !lookup.has(n)) lookup.set(n, c);
+        });
+    });
+  }
+
+  function cleanPoint(s) {
+    return String(s || "")
+      .replace(/[（(]\s*(承担住宿|住宿自理|住宿)\s*[）)]/g, "")
+      .replace(/承担住宿|住宿自理/g, "")
+      .trim();
+  }
+
+  function findCompany(name) {
+    if (!state.data) return null;
+    if (!lookup) buildLookup();
+    const p = cleanPoint(name);
+    const n = normName(p);
+    if (!n) return null;
+    if (lookup.has(n)) return lookup.get(n);
+    let best = null, bestLen = 0;
+    lookup.forEach(function (c, k) {
+      if (k.length >= 2 && k.length > bestLen && (n.indexOf(k) >= 0 || k.indexOf(n) >= 0)) {
+        best = c; bestLen = k.length;
+      }
+    });
+    return best;
+  }
+
+  function ensureData() {
+    if (state.data) { if (!lookup) buildLookup(); return Promise.resolve(state.data); }
+    if (dataPromise) return dataPromise;
+    dataPromise = fetch("enterprise_index.json?v=" + DATA_VERSION, { cache: "no-cache" })
       .then(function (r) {
         if (!r.ok) throw new Error("HTTP " + r.status);
         return r.json();
       })
       .then(function (json) {
         state.data = json;
-        state.loading = false;
-        render();
+        buildLookup();
+        return json;
       })
+      .catch(function (e) {
+        dataPromise = null;
+        throw e;
+      });
+    return dataPromise;
+  }
+
+  function load() {
+    if (state.data) { if (!lookup) buildLookup(); render(); return Promise.resolve(state.data); }
+    if (state.loading) return dataPromise || Promise.resolve();
+    state.loading = true;
+    state.error = "";
+    return ensureData()
+      .then(function () { state.loading = false; render(); return state.data; })
       .catch(function (e) {
         state.loading = false;
         state.error = "企业库加载失败：" + (e && e.message ? e.message : e);
@@ -373,6 +428,7 @@
     if (panel) panel.classList.remove("open");
   }
 
+  window.EnterpriseData = { ensure: ensureData, find: findCompany };
   window.EnterprisePanel = { open: open, close: close, refresh: render };
 
   window.addEventListener("budget:row-change", function (e) {

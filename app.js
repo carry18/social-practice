@@ -340,6 +340,50 @@ function buildWorkbook(computed) {
 
 /* ---------- 公文版 docx 生成（复刻 gen_budget_docx.py 排版） ---------- */
 
+function splitCompanyNames(C) {
+  return String(C || "").split(/[、,，;；\n]+/)
+    .map(function (s) {
+      return String(s || "")
+        .replace(/[（(]\s*(承担住宿|住宿自理|住宿)\s*[）)]/g, "")
+        .replace(/承担住宿|住宿自理/g, "")
+        .trim();
+    })
+    .filter(Boolean);
+}
+
+function wordCompanyName(c, fallback) {
+  let n = c ? (c.canonical_name || c.short_name || c.raw || fallback) : fallback;
+  n = String(n || "").trim();
+  if (c && n.indexOf("·") < 0) {
+    n = n.replace(/(股份有限公司|有限责任公司|有限公司|集团有限公司)$/, "");
+  }
+  return n || fallback;
+}
+
+function companyRemark(t) {
+  const api = (typeof window !== "undefined") ? window.EnterpriseData : null;
+  const items = splitCompanyNames(t.C).map(function (p, idx) {
+    const c = api ? api.find(p) : null;
+    return { p: p, idx: idx, c: c };
+  });
+  items.sort(function (a, b) {
+    const da = (a.c && (a.c.defense || a.c.troops)) ? 0 : 1;
+    const db = (b.c && (b.c.defense || b.c.troops)) ? 0 : 1;
+    return da - db || a.idx - b.idx;
+  });
+  const names = [];
+  const seen = {};
+  items.forEach(function (x) {
+    let n = wordCompanyName(x.c, x.p);
+    n = String(n || "").trim();
+    if (!n || seen[n]) return;
+    seen[n] = true;
+    names.push(n);
+  });
+  if (names.length > 4) return names.slice(0, 4).join("、") + "等";
+  return names.join("、");
+}
+
 function docxDescs(t) {
   // 与 Python 端 gen_budget_docx 的描述列口径一致
   const rs = t.ac === 1 ? "" : " x 2/3";
@@ -349,8 +393,7 @@ function docxDescs(t) {
       : (t.ac === 1 ? `${fmtNum(t.V / 2)}/人·天*${t.nights}晚`
                     : `${fmtNum(t.V / 2)}/人·天*2/3*${t.nights}晚`),
     i_desc: t.weeks > 1 ? `${fmtNum(t.Z)}/人·周*${t.weeks}周${rs}` : `${fmtNum(t.Z)}/人${rs}`,
-    remark: (t.ac === 1 ? "就协全部" : "院系 1/3，剩余就协")
-      + (t.V === 0 ? "；部分经费由地方支持" : ""),
+    remark: companyRemark(t),
   };
 }
 
@@ -385,9 +428,15 @@ function buildDocx(computed, title, season) {
   const border = { style: BorderStyle.SINGLE, size: 2, color: "000000" };
   const borders = { top: border, bottom: border, left: border, right: border,
                     insideHorizontal: border, insideVertical: border };
-  const widths = [0.9, 3.0, 0.9, 2.2, 1.3, 2.5, 1.3, 1.8, 1.2, 1.3, 1.6]; // cm，合计18cm适配竖版版心
+  const widths = [0.9, 2.8, 0.9, 2.0, 1.2, 2.3, 1.2, 1.7, 1.1, 1.2, 2.7]; // cm，合计18cm适配竖版版心
+  let termFlag = String(season || "");
+  if (typeof document !== "undefined") {
+    const sel = document.getElementById("doc-term");
+    if (sel) termFlag += " " + sel.value;
+  }
+  const inTerm = /学期中/.test(termFlag);
 
-  const teams = computed.map(t => t.t_desc !== undefined ? t : ({ ...t, ...docxDescs(t) }));
+  const teams = computed.map(t => ({ ...t, ...docxDescs(t), remark: companyRemark(t) }));
   const total = teams.reduce((a, t) => a + t.AB, 0);
 
   // 表头三行
@@ -408,15 +457,17 @@ function buildDocx(computed, title, season) {
     cell("单人费用", { bold: true }), cell("合计", { bold: true })] });
 
   // 支队目的地列：地点 12 号字、承办院系 10 号字（与公文样例一致）
-  const destCell = t => new TableCell({
-    verticalAlign: VerticalAlign.CENTER,
-    children: [
+  const destCell = t => {
+    const kids = [
       new Paragraph({ alignment: AlignmentType.CENTER,
         children: [new TextRun({ text: String(t.B || ""), font: F_CELL, size: HP(12) })] }),
-      new Paragraph({ alignment: AlignmentType.CENTER,
-        children: [new TextRun({ text: String(t.D || ""), font: F_CELL, size: HP(10) })] }),
-    ],
-  });
+    ];
+    if (!inTerm && String(t.D || "").trim()) {
+      kids.push(new Paragraph({ alignment: AlignmentType.CENTER,
+        children: [new TextRun({ text: String(t.D || ""), font: F_CELL, size: HP(10) })] }));
+    }
+    return new TableCell({ verticalAlign: VerticalAlign.CENTER, children: kids });
+  };
 
   const dataRows = teams.map((t, i) => new TableRow({ children: [
     cell(i + 1), destCell(t), cell(t.people),
@@ -455,7 +506,7 @@ function buildDocx(computed, title, season) {
         table,
         para("", F_BODY, 12),
         para(note1, F_BODY, 10.5),
-        para(note2, F_BODY, 10.5),
+        ...(inTerm ? [] : [para(note2, F_BODY, 10.5)]),
       ],
     }],
   });
@@ -845,7 +896,7 @@ if (typeof document !== "undefined") {
     }
   }
 
-  function generate(fmt) {
+  async function generate(fmt) {
     const computed = lastComputed;
     if (!computed) { alert("请先点击「生成预览」核对数据"); return; }
     const d = new Date(), pad = n => String(n).padStart(2, "0");
@@ -854,10 +905,11 @@ if (typeof document !== "undefined") {
       const wb = buildWorkbook(computed);
       XLSX.writeFile(wb, `实践预算_${stamp}.xlsx`);
     } else {
+      try { if (window.EnterpriseData) await window.EnterpriseData.ensure(); } catch (e) { /* 用原始点位名 */ }
       const title = $("doc-title").value.trim() || "实践预算";
       const season = $("doc-season").value.trim() || "本期";
-      docx.Packer.toBlob(buildDocx(computed, title, season))
-        .then(blob => downloadBlob(blob, `${title}.docx`));
+      const blob = await docx.Packer.toBlob(buildDocx(computed, title, season));
+      downloadBlob(blob, `${title}.docx`);
     }
   }
 
@@ -1018,8 +1070,9 @@ if (typeof document !== "undefined") {
     if (!teams.length) { $("docx-info").textContent = "未识别到支队数据行"; return; }
     const title = $("doc-title").value.trim() || "实践预算";
     const season = $("doc-season").value.trim() || "本期";
-    docx.Packer.toBlob(buildDocx(teams, title, season))
-      .then(blob => downloadBlob(blob, `${title}.docx`));
+    try { if (window.EnterpriseData) await window.EnterpriseData.ensure(); } catch (e) { /* 用原始点位名 */ }
+    const blob = await docx.Packer.toBlob(buildDocx(teams, title, season));
+    downloadBlob(blob, `${title}.docx`);
     lastUploaded = teams;
     lastUploadedGrid = extractGrid(wb.Sheets[name]);
     gridFromReadback = false;
