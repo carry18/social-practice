@@ -5,6 +5,7 @@
 """
 import csv
 import json
+import re
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -18,6 +19,26 @@ DEFENSE = {
     "兵器工业", "兵器装备", "中国电科", "中国电子", "中国工程物理研究院",
 }
 TROOPS = {"部队"}
+
+_DIGITS = "〇一二三四五六七八九"
+
+
+def cn_num(n):
+    if n < 10:
+        return _DIGITS[n]
+    if n < 20:
+        return "十" + (_DIGITS[n % 10] if n % 10 else "")
+    if n < 100:
+        return _DIGITS[n // 10] + "十" + (_DIGITS[n % 10] if n % 10 else "")
+    return "".join(_DIGITS[int(d)] for d in str(n))
+
+
+def formalize_name(s):
+    """公文口径：去间隔号；所/局编号用中文数字（14所→十四所，719所→七一九所）。"""
+    s = str(s or "").replace("·", "")
+    s = re.sub(r"(\d+)所", lambda m: cn_num(int(m.group(1))) + "所", s)
+    s = re.sub(r"(\d+)局", lambda m: cn_num(int(m.group(1))) + "局", s)
+    return s
 
 
 def main():
@@ -33,11 +54,16 @@ def main():
         group = r["集团"]
         a = alias_map.get((r["单位名称"], group), {})
         legal = a.get("法定全称", "")
-        canonical = a.get("规范名", "") or r["展示名称"]
-        short = a.get("简称", "") or canonical
-        aliases = [x for x in (a.get("别名", "") or "").split("|") if x]
+        canonical_raw = a.get("规范名", "") or r["展示名称"]
+        canonical = formalize_name(canonical_raw)
+        short = formalize_name(a.get("简称", "") or canonical_raw)
+        aliases = []
+        for x in (a.get("别名", "") or "").split("|"):
+            for v in (x, formalize_name(x)):
+                if v and v not in aliases:
+                    aliases.append(v)
         name_status = a.get("状态", "")
-        write_name = legal or canonical.replace("·", " ")
+        write_name = legal or canonical
         companies.append({
             "id": "c_%04d" % (len(companies) + 1),
             "name": canonical,
