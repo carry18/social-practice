@@ -2,7 +2,7 @@
 (function () {
   if (typeof window === "undefined") return;
 
-  const DATA_VERSION = "20261108";
+  const DATA_VERSION = "20261109";
 
   const state = {
     open: false,
@@ -15,6 +15,7 @@
     view: "all",
     cities: [],
     province: "",
+    national: false,
     base: [],
     fallback: false,
   };
@@ -61,6 +62,7 @@
         '<button class="ent-chip on" data-view="all">全部</button>' +
         '<button class="ent-chip mil" data-view="defense">军工</button>' +
         '<button class="ent-chip" data-view="troops">部队</button>' +
+        '<button class="ent-chip" data-scope="national">全国</button>' +
         '<select class="ent-group" id="ent-group"><option value="">全部集团</option></select>' +
       '</div>' +
       '<div class="ent-list" id="ent-list"></div>' +
@@ -79,6 +81,11 @@
     panel.querySelector(".ent-close").addEventListener("click", close);
     qEl.addEventListener("input", () => { state.q = qEl.value.trim(); renderList(); });
     groupEl.addEventListener("change", () => { state.group = groupEl.value; renderList(); });
+    panel.querySelector('[data-scope="national"]').addEventListener("click", function () {
+      state.national = !state.national;
+      this.classList.toggle("on", state.national);
+      render();
+    });
     subEl.addEventListener("click", function (e) {
       const btn = e.target.closest(".ent-nav");
       if (!btn) return;
@@ -175,6 +182,10 @@
   function baseList() {
     if (!state.data) return [];
     const all = state.data.companies || [];
+    if (state.national) {
+      state.cities = []; state.province = ""; state.fallback = false; state.base = all;
+      return all;
+    }
     const picked = parseCities((bridge() && bridge().getRow(state.row) || {}).B);
     state.cities = picked.cities;
     state.province = picked.province;
@@ -274,12 +285,14 @@
     const row = bridge() && bridge().getRow(state.row);
     const place = (row && String(row.B || "").trim()) || "未填地点";
     let label = "全部企业";
-    if (state.cities.length) label = state.cities.join("、");
+    if (state.national) label = "全国";
+    else if (state.cities.length) label = state.cities.join("、");
     else if (state.province) label = state.province;
     if (state.fallback) label += " · 同省";
     cityEl.textContent = label;
     rowLabelEl.textContent = "第 " + (state.row + 1) + " 行";
     subTextEl.textContent = " · 地点「" + place + "」" +
+      (state.national ? " · 全国范围" : "") +
       (state.fallback ? " · 该市暂无记录，显示同省" : "");
 
     // 集团下拉：只列当前地点/省出现的集团，按数量排序
@@ -342,13 +355,16 @@
     state.q = "";
     state.group = "";
     state.view = "all";
+    state.national = false;
     state.base = [];
     build();
     panel.classList.add("open");
     if (qEl) qEl.value = "";
     panel.querySelectorAll(".ent-chip").forEach(function (x) {
-      x.classList.toggle("on", x.getAttribute("data-view") === "all");
+      if (x.getAttribute("data-view")) x.classList.toggle("on", x.getAttribute("data-view") === "all");
     });
+    const nat = panel.querySelector('[data-scope="national"]');
+    if (nat) nat.classList.remove("on");
     if (state.data) render(); else load();
   }
 
