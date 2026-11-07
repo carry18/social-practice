@@ -257,10 +257,33 @@
     }).finally(function () { loading = false; });
   }
 
+  function rebuild() {
+    var btn = $('ov-rebuild'), msg = $('ov-msg');
+    if (btn) btn.disabled = true;
+    if (msg) msg.textContent = '正在扫描历史预算/打款工作表…';
+    Promise.all([
+      safe(callFinal({ action: 'rebuildSummary', kind: 'final' })),
+      safe(callBudget({ action: 'rebuildSummary', kind: 'budget' }))
+    ]).then(function (res) {
+      var errs = [];
+      if (res[0].e) errs.push('决算汇总：' + res[0].e.message);
+      if (res[1].e) errs.push('预算汇总：' + res[1].e.message);
+      if (res[0].e && res[1].e) throw new Error(errs.join('；'));
+      if (msg) msg.textContent = '重建完成' + (errs.length ? '；' + errs.join('；') : '') + '，正在刷新…';
+      load();
+    }).catch(function (e) {
+      if (msg) msg.textContent = '重建失败：' + e.message;
+    }).finally(function () {
+      if (btn) btn.disabled = false;
+    });
+  }
+
   window.SJ_OVERVIEW = { load: load };
 
   var btn = $('ov-refresh');
   if (btn) btn.onclick = load;
+  var rebuildBtn = $('ov-rebuild');
+  if (rebuildBtn) rebuildBtn.onclick = rebuild;
   var termSel = $('ov-chart-term');
   if (termSel) termSel.onchange = function () { renderChart(lastRows); };
   window.addEventListener('resize', function () { if (chart) chart.resize(); });
