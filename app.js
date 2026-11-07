@@ -530,7 +530,7 @@ if (typeof document !== "undefined") {
           `<td><input data-i="${i}" data-c="${c}" value="${String(t[c] ?? "").replace(/"/g, "&quot;")}" ` +
           (c === "B" ? `list="city-list" ` : "") +
           `placeholder="${{ B: "可自由输入，如 合肥、上海", C: "企业全称…", D: "就协", E: "7.19-7.23", F: "12", T_manual: "自动", H: "0" }[c]}"></td>`).join("") +
-        `<td><button data-del="${i}" style="border:none;background:none;cursor:pointer;color:#c00">✕</button></td>`;
+        `<td><div class="ent-cell"><button data-ent="${i}" class="ent-btn" title="企业参考">企</button><button data-del="${i}" style="border:none;background:none;cursor:pointer;color:#c00">✕</button></div></td>`;
       tb.appendChild(tr);
     });
     tb.querySelectorAll("input").forEach(inp => inp.addEventListener("input", e => {
@@ -549,13 +549,33 @@ if (typeof document !== "undefined") {
       }
       saveLocal();
       invalidate();
+      window.dispatchEvent(new CustomEvent("budget:row-change", { detail: { i, c, value: e.target.value } }));
+    }));
+    tb.querySelectorAll("[data-ent]").forEach(b => b.addEventListener("click", e => {
+      const i = +e.currentTarget.dataset.ent;
+      if (window.EnterprisePanel) window.EnterprisePanel.open(i);
     }));
     tb.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", e => {
       teams.splice(+e.target.dataset.del, 1);
       if (!teams.length) teams = [{ B: "", C: "", D: "就协", E: "", F: 12, H: "" }];
       renderEditor(); saveLocal(); invalidate();
     }));
+    window.dispatchEvent(new CustomEvent("budget:render"));
   }
+
+  // 供企业参考侧栏读写当前行（只改 C 列，不影响预算计算）
+  window.BudgetBridge = {
+    getRow(i) { return teams[i] || null; },
+    rowCount() { return teams.length; },
+    setPoint(i, value) {
+      if (!teams[i]) return;
+      teams[i].C = value;
+      const inp = document.querySelector(`#editor input[data-i="${i}"][data-c="C"]`);
+      if (inp) inp.value = value;
+      saveLocal();
+      invalidate();
+    }
+  };
 
   function collectValid() {
     return teams.filter(t => String(t.B || "").trim() && String(t.E || "").trim());
