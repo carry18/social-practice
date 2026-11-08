@@ -1039,9 +1039,14 @@ if (typeof document !== "undefined") {
         const st = cell.s || null;
         const fg = st && st.fill && st.fill.fgColor ? hex(st.fill.fgColor) : null;
         const hasVal = cell.v !== undefined && cell.v !== null && cell.v !== "";
-        if (!hasVal && !fg) continue;                      // 空且无底色 → 忽略
+        const hasFormula = !!cell.f;
+        if (!hasVal && !hasFormula && !fg) continue;       // 空且无底色 → 忽略
 
-        if (hasVal) cells.push([r, c, typeof cell.v === "number" ? cell.v : String(cell.v)]);
+        if (hasVal || hasFormula) {
+          cells.push([r, c,
+            hasVal ? (typeof cell.v === "number" ? cell.v : String(cell.v)) : "",
+            hasFormula ? String(cell.f).replace(/^=/, "") : ""]);
+        }
 
         if (st) {
           const sig = {};
