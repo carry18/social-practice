@@ -11,7 +11,7 @@
 调整入口：在 Excel 里改完预算表（人数/票价/住宿单价/比例等均可改）并保存后，
 直接重跑本脚本即可同步生成新 Word——呈现列优先读 Excel 公式缓存值（以 Excel 实际数字为准）；
 未在 Excel 打开保存过（无缓存）时按既定口径从 B/D/E/F/T/V/Z 输入格重算
-（交通=单人票价×人数×比例；住宿=V标间×ceil(人数/2)×(天数-1)×比例；保险=Z×人数×ceil(天数/7)×比例，
+（交通=单人票价×人数×比例；住宿=V标间/2×人数×(天数-1)×比例；保险=Z×人数×ceil(天数/7)×比例，
  即 ≤30元/人/周；比例：D 含"就协"/"就业协会" → 1，否则 2/3）。
 """
 import argparse, math, re
@@ -83,7 +83,7 @@ def read_teams(path, sheet, start_row):
         ins = z_cell if isinstance(z_cell, (int, float)) else 30
 
         t_sum = (T or 0) * people * ratio
-        l_sum = per_lodge * 2 * math.ceil(people / 2) * nights * ratio if per_lodge else 0
+        l_sum = per_lodge * people * nights * ratio if per_lodge else 0
         weeks = math.ceil(days / 7) if days else 1
         i_sum = ins * people * weeks * ratio
 

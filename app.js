@@ -1,7 +1,7 @@
 /* 实践支队预算表生成器 —— 纯前端逻辑
  * 口径与 实践部/自动化/*.py 完全一致：
  *   交通 = 行程链逐段二等座最高票价之和（北京→A→B→北京）
- *   住宿 = 标间300 × ceil(人数/2) × (天数-1) × 比例（含"承担住宿"字样则 0）
+ *   住宿 = 150元/人·晚 × 人数 × (天数-1) × 比例（含"承担住宿"字样则 0；不再按房间数向上取整）
  *   保险 = 30 × 人数 × ceil(天数/7) × 比例（30元/人/周）
  *   比例 = 承办单位含"就协"/"就业协会" → 1，否则 2/3
  */
@@ -121,7 +121,7 @@ function computeTeam(team, fares, cities) {
   const T = fare.total;  const nights = days ? days - 1 : 0;
   const weeks = days ? Math.ceil(days / 7) : 1;
   const W = Math.ceil(people / 2);
-  const U = people * T * ac, Y = V * W * nights * ac, AA = Z * people * weeks * ac;
+  const U = people * T * ac, Y = (V / 2) * people * nights * ac, AA = Z * people * weeks * ac;
   return {
     ...team, cities: cs, days, people, ac, acTxt, V, Z, W, weeks,
     nights, fare, T, U, Y, AA, AB: U + Y + AA,
@@ -326,7 +326,7 @@ function buildWorkbook(computed) {
     ws[`V${r}`] = { t: "n", v: t.V };
     setF(ws, `W${r}`, `CEILING(K${r}/2,1)`, t.W);
     setF(ws, `X${r}`, `IF(ISNUMBER(J${r}),J${r}-1,"")`, t.nights);
-    setF(ws, `Y${r}`, `V${r}*W${r}*X${r}*AC${r}`, t.Y);
+    setF(ws, `Y${r}`, `V${r}/2*K${r}*X${r}*AC${r}`, t.Y);
     ws[`Z${r}`] = { t: "n", v: t.Z };
     setF(ws, `AA${r}`, `Z${r}*K${r}*CEILING(J${r}/7,1)*AC${r}`, t.AA);
     setF(ws, `AB${r}`, `U${r}+Y${r}+AA${r}`, t.AB);

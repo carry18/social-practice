@@ -88,7 +88,7 @@ def formulas(r, guarded):
         "V": 300,
         "W": f"=CEILING(K{r}/2,1)",
         "X": f'=IF(ISNUMBER(J{r}),J{r}-1,"")',
-        "Y": f"=V{r}*W{r}*X{r}*AC{r}",
+        "Y": f"=V{r}/2*K{r}*X{r}*AC{r}",
         "Z": 30,
         "AA": f"=Z{r}*K{r}*CEILING(J{r}/7,1)*AC{r}",
         "AB": f"=U{r}+Y{r}+AA{r}",

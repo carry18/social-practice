@@ -92,7 +92,7 @@ def main():
         if r_total is None and all(isinstance(x, (int, float)) for x in (t_val, people)) and days:
             import math
             r_total = (t_val * people * ac
-                       + (v_price * math.ceil(people / 2) * (days - 1) * ac if v_price else 0)
+                       + ((v_price / 2) * people * (days - 1) * ac if v_price else 0)
                        + z_price * people * weeks * ac)
             r_total = f"{r_total:g}（按口径重算）"
         print(f"  预算总额: {r_total if r_total is not None else '(R列未缓存，需在Excel打开保存)'}")
