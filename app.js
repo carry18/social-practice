@@ -936,7 +936,8 @@ if (typeof document !== "undefined") {
     info.textContent = "读取中…";
     try {
       const names = await callBudget({ action: "list" });
-      const usable = (names || []).filter(n => !/汇总/.test(n) && !/决算表v1/i.test(n));
+      const hideSummary = $("budget-hide-summary") ? $("budget-hide-summary").checked : true;
+      const usable = (names || []).filter(n => !(hideSummary && (/汇总/.test(n) || /决算表v1/i.test(n))));
       usable.forEach(n => {
         const op = document.createElement("option");
         op.value = n; op.textContent = n; sel.appendChild(op);
@@ -945,8 +946,8 @@ if (typeof document !== "undefined") {
       const hits = usable.filter(n => /预算/.test(n));
       if (hits.length) sel.value = hits[hits.length - 1];
       info.textContent = usable.length
-        ? `共 ${usable.length} 个工作表（已隐藏汇总表）`
-        : "没有可读取的预算工作表（汇总表已隐藏）";
+        ? `共 ${usable.length} 个工作表` + (hideSummary ? "（已隐藏汇总表）" : "")
+        : (hideSummary ? "没有可读取的预算工作表（汇总表已隐藏）" : "没有可读取的预算工作表");
     } catch (e) {
       info.textContent = "读取失败：" + e.message + "（请确认云函数已配 KDOCS_WEBHOOK_BUDGET）";
     }
@@ -1401,6 +1402,7 @@ if (typeof document !== "undefined") {
     if ($("generate-push")) $("generate-push").addEventListener("click", generatePush);
     if ($("budget-sync")) $("budget-sync").addEventListener("click", syncBudget);
     if ($("budget-load-refresh")) $("budget-load-refresh").addEventListener("click", refreshBudgetList);
+    if ($("budget-hide-summary")) $("budget-hide-summary").addEventListener("change", refreshBudgetList);
     if ($("budget-load")) $("budget-load").addEventListener("click", loadBudgetFromSheet);
     $("drop").addEventListener("click", () => $("file").click());
     $("drop").addEventListener("dragover", e => { e.preventDefault(); $("drop").classList.add("hover"); });
