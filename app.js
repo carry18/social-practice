@@ -953,6 +953,29 @@ if (typeof document !== "undefined") {
     }
   }
 
+  async function refreshPushList() {
+    const sel = $("push-sheet"), info = $("push-info");
+    if (!sel) return;
+    sel.innerHTML = "";
+    if (info) info.textContent = "读取金山工作表…";
+    try {
+      const names = await callBudget({ action: "list" });
+      const hideSummary = $("push-hide-summary") ? $("push-hide-summary").checked : true;
+      const usable = (names || []).filter(n => !(hideSummary && (/汇总/.test(n) || /决算表v1/i.test(n))));
+      usable.forEach(n => {
+        const op = document.createElement("option");
+        op.value = n; op.textContent = n; sel.appendChild(op);
+      });
+      const hits = usable.filter(n => /预算/.test(n));
+      if (hits.length) sel.value = hits[hits.length - 1];
+      if (info) info.textContent = usable.length
+        ? `共 ${usable.length} 个工作表` + (hideSummary ? "（已隐藏汇总表）" : "")
+        : "没有可读取的预算工作表";
+    } catch (e) {
+      if (info) info.textContent = "读取失败：" + e.message;
+    }
+  }
+
   async function loadBudgetFromSheet() {
     const sel = $("budget-load-sheet"), info = $("budget-load-info");
     const name = sel && sel.value;
@@ -1124,10 +1147,10 @@ if (typeof document !== "undefined") {
   }
 
   async function loadPushFromSheet() {
-    const sel = $("budget-load-sheet"), info = $("push-info");
+    const sel = $("push-sheet"), info = $("push-info");
     if (info) info.textContent = "读取金山预算工作表…";
     try {
-      if (!sel || !sel.options.length) await refreshBudgetList();
+      if (!sel || !sel.options.length) await refreshPushList();
       const name = sel && sel.value;
       if (!name) throw new Error("没有可读取的预算工作表，请先刷新列表");
       if (/汇总/.test(name)) throw new Error("汇总表不能生成推送，请选择某一期预算表");
@@ -1417,6 +1440,8 @@ if (typeof document !== "undefined") {
     if ($("upload-push")) $("upload-push").addEventListener("click", () => $("file-push").click());
     if ($("file-push")) $("file-push").addEventListener("change", e => { if (e.target.files[0]) handlePushFile(e.target.files[0]); });
     if ($("load-push")) $("load-push").addEventListener("click", loadPushFromSheet);
+    if ($("push-refresh")) $("push-refresh").addEventListener("click", refreshPushList);
+    if ($("push-hide-summary")) $("push-hide-summary").addEventListener("change", refreshPushList);
 
     try {
       const res = await fetch("fares.json");

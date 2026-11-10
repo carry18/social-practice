@@ -50,6 +50,10 @@
   .card { background: #fff; border: 1px solid #e5e5e5; border-radius: 10px;
           padding: 20px 24px; margin-bottom: 20px; }
   .card h2 { margin: 0 0 12px; font-size: 16px; color: var(--purple); }
+  .push-source { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    border: 1px solid #f0e8f5; border-radius: 8px; padding: 8px 10px; margin: 8px 0; }
+  .push-tag { font-size: 11px; color: var(--purple); background: var(--purple-light);
+    border-radius: 4px; padding: 2px 7px; flex: none; }
   .main-tabs { display: flex; gap: 10px; flex-wrap: wrap; margin: 0 0 20px;
                background: #fff; border: 1px solid #e5e5e5; border-radius: 12px; padding: 10px 12px; }
   .main-tabs button { border: 1px solid transparent; background: #f6f0fa; color: var(--purple);
@@ -250,7 +254,7 @@
   </div>
 
   <div class="card">
-    <h2>② 生成预算文件</h2>
+    <h2>② 预算生成</h2>
     <p class="hint" id="fare-info">票价库加载中…</p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
       <label class="hint">期次
@@ -270,31 +274,51 @@
     <button class="btn" id="preview-btn" disabled>生成预览</button>
     <button class="btn" id="generate" disabled style="margin-left:10px">下载预算表 xlsx</button>
     <button class="btn" id="generate-docx" disabled style="margin-left:10px">下载公文版 Word</button>
-    <button class="btn secondary" id="generate-push" disabled style="margin-left:10px" title="按当前支队生成招募推送 Word，保留参考模板的全部格式">📣 生成招募推送</button>
     <button class="btn secondary" id="budget-sync" disabled style="margin-left:10px">📤 同步到金山预算表</button>
     <span class="hint" id="budget-sync-info" style="margin-left:8px"></span>
     <span class="hint">（先点"生成预览"核对下方表格，确认无误后再下载）</span>
     <div class="warn" id="warn"></div>
     <table id="preview" style="display:none"></table>
-    <hr style="border:none;border-top:1px dashed #e0d4ea;margin:16px 0">
-    <p class="hint"><b>已下载并在 Excel/WPS 里手动调整了预算表？</b>把调整后的文件传回来，按<b>表内数值</b>生成公文 Word（公式缓存值优先，请保存后再上传）：</p>
-    <input type="file" id="file-docx" accept=".xlsx,.xls" style="display:none">
-    <button class="btn secondary" id="upload-docx">上传调整后的 xlsx → 生成 Word</button>
-    <hr style="border:none;border-top:1px dashed #e0d4ea;margin:16px 0">
-    <p class="hint"><b>从金山导出的预算 xlsx 直接生成招募推送：</b>读取 B/C/D/E/F 列，保留推送模板格式，不要求先在网页里重填。</p>
-    <input type="file" id="file-push" accept=".xlsx,.xls" style="display:none">
-    <button class="btn secondary" id="upload-push">上传金山预算 xlsx → 生成招募推送</button>
-    <button class="btn secondary" id="load-push" style="margin-left:8px">从金山读取预算 → 生成推送</button>
-    <span class="hint" id="push-info" style="margin-left:8px"></span>
-    <span class="hint" id="docx-info" style="margin-left:8px"></span>
+  </div>
 
-    <hr style="border:none;border-top:1px dashed #e0d4ea;margin:16px 0">
-    <p class="hint"><b>在金山里改过预算表，想接着在网页上改？</b>选一个金山工作表，点「读回」把数据填进上方编辑表格：</p>
+  <div class="card">
+    <h2>③ 招募推送 Word</h2>
+    <p class="hint">三种来源任选一种，生成结果保留参考模板的全部格式；企业名优先用规范简称。</p>
+    <div class="push-source">
+      <span class="push-tag">当前预览</span>
+      <button class="btn secondary" id="generate-push" disabled>生成招募推送</button>
+      <span class="hint">先在②完成「生成预览」</span>
+    </div>
+    <div class="push-source">
+      <span class="push-tag">上传 xlsx</span>
+      <input type="file" id="file-push" accept=".xlsx,.xls" style="display:none">
+      <button class="btn secondary" id="upload-push">上传金山预算 xlsx → 生成推送</button>
+      <span class="hint">读取 B/C/D/E/F 列</span>
+    </div>
+    <div class="push-source">
+      <span class="push-tag">金山读取</span>
+      <select id="push-sheet" style="width:260px;padding:4px 6px;font-size:13px"></select>
+      <button class="btn secondary" id="push-refresh" type="button">🔄 刷新</button>
+      <label class="hint"><input type="checkbox" id="push-hide-summary" checked> 隐藏汇总表</label>
+      <button class="btn secondary" id="load-push" type="button">读取并生成</button>
+    </div>
+    <div class="hint" id="push-info" style="margin-top:8px"></div>
+  </div>
+
+  <div class="card">
+    <h2>④ 金山与导入</h2>
+    <p class="hint"><b>从金山读回预算</b>：选一个期次工作表，把数据填进上方编辑表格继续改。</p>
     <select id="budget-load-sheet" style="width:260px;padding:4px 6px;font-size:13px"></select>
     <button class="btn secondary" id="budget-load-refresh" type="button" style="margin-left:8px">🔄 刷新列表</button>
     <label class="hint" style="margin-left:8px"><input type="checkbox" id="budget-hide-summary" checked> 隐藏汇总表</label>
     <button class="btn secondary" id="budget-load" type="button" style="margin-left:8px">📥 从金山读回</button>
     <span class="hint" id="budget-load-info" style="margin-left:8px"></span>
+
+    <hr style="border:none;border-top:1px dashed #e0d4ea;margin:16px 0">
+    <p class="hint"><b>已下载并在 Excel/WPS 里手动调整了预算表？</b>把调整后的文件传回来，按表内数值生成公文 Word（公式缓存值优先，请保存后再上传）：</p>
+    <input type="file" id="file-docx" accept=".xlsx,.xls" style="display:none">
+    <button class="btn secondary" id="upload-docx">上传调整后的 xlsx → 生成 Word</button>
+    <span class="hint" id="docx-info" style="margin-left:8px"></span>
   </div>
 
   </section>
@@ -376,7 +400,7 @@
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 <script src="overview.js?v=20261120"></script>
 <script src="https://cdn.jsdelivr.net/npm/pizzip@3.1.7/dist/pizzip.min.js"></script>
-<script src="app.js?v=20261128"></script>
+<script src="app.js?v=20261129"></script>
 <script src="enterprise.js?v=20261112"></script>
 <script src="payout.js?v=20261118"></script>
 <script src="note.js?v=20261105m"></script>
