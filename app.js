@@ -936,14 +936,17 @@ if (typeof document !== "undefined") {
     info.textContent = "读取中…";
     try {
       const names = await callBudget({ action: "list" });
-      (names || []).forEach(n => {
+      const usable = (names || []).filter(n => !/汇总/.test(n) && !/决算表v1/i.test(n));
+      usable.forEach(n => {
         const op = document.createElement("option");
         op.value = n; op.textContent = n; sel.appendChild(op);
       });
-      // 默认选名字里含「预算」的最后一个
-      const hits = (names || []).filter(n => /预算/.test(n));
+      // 默认选名字里含「预算」的最后一个（汇总表已过滤）
+      const hits = usable.filter(n => /预算/.test(n));
       if (hits.length) sel.value = hits[hits.length - 1];
-      info.textContent = (names || []).length ? `共 ${(names || []).length} 个工作表` : "金山里还没有工作表";
+      info.textContent = usable.length
+        ? `共 ${usable.length} 个工作表（已隐藏汇总表）`
+        : "没有可读取的预算工作表（汇总表已隐藏）";
     } catch (e) {
       info.textContent = "读取失败：" + e.message + "（请确认云函数已配 KDOCS_WEBHOOK_BUDGET）";
     }
@@ -953,6 +956,7 @@ if (typeof document !== "undefined") {
     const sel = $("budget-load-sheet"), info = $("budget-load-info");
     const name = sel && sel.value;
     if (!name) { alert("请先选一个金山工作表（可点「刷新列表」）"); return; }
+    if (/汇总/.test(name)) { alert("汇总表不能读回，请选择某一期的预算表"); return; }
     if (lastComputed && !confirm("读回会覆盖当前编辑表格里的内容，继续吗？")) return;
     info.textContent = "读取中…";
     try {
@@ -1115,6 +1119,43 @@ if (typeof document !== "undefined") {
     } catch (e) {
       if (info) info.textContent = "生成失败：" + (e && e.message ? e.message : e);
       alert("从预算 xlsx 生成推送失败：" + (e && e.message ? e.message : e));
+    }
+  }
+
+  async function loadPushFromSheet() {
+    const sel = $("budget-load-sheet"), info = $("push-info");
+    if (info) info.textContent = "读取金山预算工作表…";
+    try {
+      if (!sel || !sel.options.length) await refreshBudgetList();
+      const name = sel && sel.value;
+      if (!name) throw new Error("没有可读取的预算工作表，请先刷新列表");
+      if (/汇总/.test(name)) throw new Error("汇总表不能生成推送，请选择某一期预算表");
+      const res = await callBudget({ action: "readBudget", sheet: name });
+      const rows = (res && res.rows) || [];
+      if (!rows.length) throw new Error("这个工作表里没有读到支队数据");
+      const term = termFromName(name) || (($("doc-term") || {}).value || "");
+      if (!term) throw new Error("无法从工作表名识别期次，请先手动选择期次");
+      const ym = name.match(/(20\d{2})/);
+      if (ym) {
+        const ys = $("doc-year");
+        if (ys && Array.from(ys.options).some(o => o.value === ym[1])) ys.value = ym[1];
+      }
+      $("doc-term").value = term;
+      applyTerm();
+      const list = rows.map(function (r) {
+        return { B: r.B || "", C: r.C || "", D: r.D || "就协", E: r.E || "",
+          F: Number(r.F) || 12, H: r.H || "" };
+      });
+      teams = list;
+      renderEditor();
+      saveLocal();
+      invalidate();
+      if (info) info.textContent = `已读取「${name}」${list.length} 支支队，正在生成推送…`;
+      await generatePush(list);
+      if (info) info.textContent = `✅ 已从「${name}」生成 ${list.length} 支支队的招募推送`;
+    } catch (e) {
+      if (info) info.textContent = "读取/生成失败：" + (e && e.message ? e.message : e);
+      alert("从金山读取预算生成推送失败：" + (e && e.message ? e.message : e));
     }
   }
 
@@ -1373,6 +1414,7 @@ if (typeof document !== "undefined") {
     $("file-docx").addEventListener("change", e => { if (e.target.files[0]) handleDocxFile(e.target.files[0]); });
     if ($("upload-push")) $("upload-push").addEventListener("click", () => $("file-push").click());
     if ($("file-push")) $("file-push").addEventListener("change", e => { if (e.target.files[0]) handlePushFile(e.target.files[0]); });
+    if ($("load-push")) $("load-push").addEventListener("click", loadPushFromSheet);
 
     try {
       const res = await fetch("fares.json");
