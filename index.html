@@ -279,6 +279,11 @@
     <p class="hint"><b>已下载并在 Excel/WPS 里手动调整了预算表？</b>把调整后的文件传回来，按<b>表内数值</b>生成公文 Word（公式缓存值优先，请保存后再上传）：</p>
     <input type="file" id="file-docx" accept=".xlsx,.xls" style="display:none">
     <button class="btn secondary" id="upload-docx">上传调整后的 xlsx → 生成 Word</button>
+    <hr style="border:none;border-top:1px dashed #e0d4ea;margin:16px 0">
+    <p class="hint"><b>从金山导出的预算 xlsx 直接生成招募推送：</b>读取 B/C/D/E/F 列，保留推送模板格式，不要求先在网页里重填。</p>
+    <input type="file" id="file-push" accept=".xlsx,.xls" style="display:none">
+    <button class="btn secondary" id="upload-push">上传金山预算 xlsx → 生成招募推送</button>
+    <span class="hint" id="push-info" style="margin-left:8px"></span>
     <span class="hint" id="docx-info" style="margin-left:8px"></span>
 
     <hr style="border:none;border-top:1px dashed #e0d4ea;margin:16px 0">
@@ -363,7 +368,7 @@
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 <script src="overview.js?v=20261120"></script>
 <script src="https://cdn.jsdelivr.net/npm/pizzip@3.1.7/dist/pizzip.min.js"></script>
-<script src="app.js?v=20261125"></script>
+<script src="app.js?v=20261126"></script>
 <script src="enterprise.js?v=20261112"></script>
 <script src="payout.js?v=20261118"></script>
 <script src="note.js?v=20261105m"></script>

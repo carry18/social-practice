@@ -589,7 +589,8 @@ function teamsFromSheet(ws, fares) {
     if (!B || typeof B !== "string" || !B.trim()) continue;
     const R = g("R"), K = g("K"), L = g("L"), M = g("M");
     if (typeof R === "number" && typeof K === "number" && L !== undefined && M !== undefined) {
-      out.push({ B: String(B).trim(), D: String(g("D") || ""), people: K,
+      out.push({ B: String(B).trim(), C: String(g("C") || ""), D: String(g("D") || ""),
+        E: String(g("E") || ""), people: K,
         t_desc: String(L), U: Number(M) || 0,
         l_desc: String(g("N") ?? ""), Y: Number(g("O")) || 0,
         i_desc: String(g("P") ?? ""), AA: Number(g("Q")) || 0,
@@ -1017,10 +1018,10 @@ if (typeof document !== "undefined") {
     });
   }
 
-  async function generatePush() {
+  async function generatePush(list) {
     const term = (($("doc-term") || {}).value || "").trim();
     if (!term) { alert("请先选择期次（寒假 / 暑期 / 春季学期中 / 秋季学期中），再生成招募推送"); return; }
-    const computed = lastComputed;
+    const computed = list || lastComputed;
     if (!computed || !computed.length) { alert("请先点击「生成预览」核对数据"); return; }
     const PizZipCtor = window.PizZip;
     if (!PizZipCtor) { alert("推送模板库未加载，请刷新页面后重试"); return; }
@@ -1068,6 +1069,52 @@ if (typeof document !== "undefined") {
       downloadBlob(blob, `【就协】${year}${term}社会实践招募推送${computed.length}支.docx`);
     } catch (e) {
       alert("生成招募推送失败：" + (e && e.message ? e.message : e));
+    }
+  }
+
+  function termFromName(name) {
+    const s = String(name || "");
+    if (/春季学期中/.test(s)) return "春季学期中";
+    if (/秋季学期中/.test(s)) return "秋季学期中";
+    if (/寒假/.test(s)) return "寒假";
+    if (/暑期|暑假/.test(s)) return "暑期";
+    return "";
+  }
+
+  async function handlePushFile(file) {
+    const info = $("push-info");
+    if (info) info.textContent = "读取预算 xlsx…";
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf);
+      const name = wb.SheetNames.includes("各支队预算按实际人数校准")
+        ? "各支队预算按实际人数校准" : wb.SheetNames[0];
+      const list = teamsFromSheet(wb.Sheets[name], FARES);
+      if (!list.length) throw new Error("没有找到 B 列非空的支队行");
+      const term = termFromName(file.name) || (($("doc-term") || {}).value || "");
+      if (!term) throw new Error("文件名里没有期次，请先手动选择期次再上传");
+      const ym = String(file.name || "").match(/(20\d{2})/);
+      if (ym) {
+        const sel = $("doc-year");
+        if (sel && Array.from(sel.options).some(o => o.value === ym[1])) sel.value = ym[1];
+      }
+      $("doc-term").value = term;
+      applyTerm();
+
+      const raw = list.map(function (t) {
+        return { B: t.B || "", C: t.C || "", D: t.D || "就协", E: t.E || "",
+          F: t.F != null ? t.F : (t.people != null ? t.people : 12), H: t.H != null ? t.H : "" };
+      });
+      teams = raw;
+      renderEditor();
+      saveLocal();
+      invalidate();
+      if (info) info.textContent = `已读取 ${list.length} 支支队，正在生成推送…`;
+      await generatePush(list);
+      if (info) info.textContent = `✅ 已生成 ${list.length} 支支队的招募推送`;
+    } catch (e) {
+      if (info) info.textContent = "生成失败：" + (e && e.message ? e.message : e);
+      alert("从预算 xlsx 生成推送失败：" + (e && e.message ? e.message : e));
     }
   }
 
@@ -1324,6 +1371,8 @@ if (typeof document !== "undefined") {
     $("file").addEventListener("change", e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
     $("upload-docx").addEventListener("click", () => $("file-docx").click());
     $("file-docx").addEventListener("change", e => { if (e.target.files[0]) handleDocxFile(e.target.files[0]); });
+    if ($("upload-push")) $("upload-push").addEventListener("click", () => $("file-push").click());
+    if ($("file-push")) $("file-push").addEventListener("change", e => { if (e.target.files[0]) handlePushFile(e.target.files[0]); });
 
     try {
       const res = await fetch("fares.json");
