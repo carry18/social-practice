@@ -163,7 +163,8 @@
 <aside class="side">
   <div class="side-h">模块</div>
   <button class="side-btn active" data-view="overview">📊 总览监控</button>
-  <button class="side-btn" data-view="ops">⚙️ 操作执行</button>
+  <button class="side-btn" data-view="budget">📝 预算编制</button>
+  <button class="side-btn" data-view="payout">💰 决算打款</button>
   <a class="side-btn" href="map.html" target="_blank" rel="noopener">🗺️ 地图（新窗口）</a>
 </aside>
 
@@ -209,8 +210,8 @@
     </div>
   </section>
 
-  <!-- ================= 模块二：操作执行 ================= -->
-  <section id="view-ops" hidden>
+  <!-- ================= 模块二：预算编制 ================= -->
+  <section id="view-budget" hidden>
   <div class="card">
     <h2>① 录入支队信息</h2>
     <div class="tabs">
@@ -296,6 +297,10 @@
     <span class="hint" id="budget-load-info" style="margin-left:8px"></span>
   </div>
 
+  </section>
+
+  <!-- ================= 模块三：决算打款 ================= -->
+  <section id="view-payout" hidden>
   <div class="card">
     <h2>③ 决算 → 打款院系表</h2>
     <p class="hint">收到新的实践<b>决算表</b>（.docx）后上传，自动提取「院系联合组织」支队（剔除“就协全部”），
@@ -346,7 +351,7 @@
 <script>
 (function () {
   var btns = Array.prototype.slice.call(document.querySelectorAll('aside.side .side-btn[data-view]'));
-  var views = { overview: 'view-overview', ops: 'view-ops' };
+  var views = { overview: 'view-overview', budget: 'view-budget', payout: 'view-payout' };
   function show(v) {
     if (!views[v]) v = 'budget';
     Object.keys(views).forEach(function (k) {
@@ -364,6 +369,7 @@
   });
   var last = null;
   try { last = localStorage.getItem('sj_view'); } catch (e) {}
+  if (last === 'ops') last = 'budget';   // 兼容旧版“操作执行”
   show(last || 'overview');
 })();
 </script>
