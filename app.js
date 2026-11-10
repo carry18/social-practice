@@ -991,7 +991,11 @@ if (typeof document !== "undefined") {
       parts.pop();
       if (parts.length) parts[parts.length - 1] += "等";
     }
-    return parts.length ? parts : [""];
+    const api = (typeof window !== "undefined") ? window.EnterpriseData : null;
+    return (parts.length ? parts : [""]).map(function (p) {
+      const c = api ? api.find(p) : null;
+      return c ? wordCompanyName(c, p) : p;
+    });
   }
 
   function setPushCell(tc, lines, W) {
@@ -1036,6 +1040,7 @@ if (typeof document !== "undefined") {
         }
       });
 
+      try { if (window.EnterpriseData) await window.EnterpriseData.ensure(); } catch (e) { /* 用原文 */ }
       const tbl = xml.getElementsByTagNameNS(W, "tbl")[0];
       if (!tbl) throw new Error("模板缺少表格");
       const trs = Array.from(tbl.getElementsByTagNameNS(W, "tr"));
