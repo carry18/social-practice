@@ -617,6 +617,7 @@ if (typeof document !== "undefined") {
     lastComputed = null;
     $("generate").disabled = true;
     $("generate-docx").disabled = true;
+    if ($("generate-push")) $("generate-push").disabled = true;
     if ($("budget-sync")) { $("budget-sync").disabled = true; $("budget-sync-info").textContent = ""; }
     $("preview").style.display = "none";
     $("warn").style.display = "none";
@@ -740,6 +741,7 @@ if (typeof document !== "undefined") {
     lastComputed = computed;
     $("generate").disabled = false;
     $("generate-docx").disabled = false;
+    if ($("generate-push")) $("generate-push").disabled = false;
     if ($("budget-sync")) $("budget-sync").disabled = false;
     return computed;
   }
@@ -973,6 +975,94 @@ if (typeof document !== "undefined") {
       }
     } catch (e) {
       info.textContent = "读取失败：" + e.message;
+    }
+  }
+
+  function splitPushCompanies(C) {
+    let parts = String(C || "").split(/[、,，;；\n]+/)
+      .map(function (s) {
+        return String(s || "")
+          .replace(/[（(]\s*(承担住宿|住宿自理|住宿)\s*[）)]/g, "")
+          .replace(/承担住宿|住宿自理/g, "")
+          .trim();
+      })
+      .filter(Boolean);
+    if (parts.length && parts[parts.length - 1] === "等") {
+      parts.pop();
+      if (parts.length) parts[parts.length - 1] += "等";
+    }
+    return parts.length ? parts : [""];
+  }
+
+  function setPushCell(tc, lines, W) {
+    const ps = Array.from(tc.getElementsByTagNameNS(W, "p"));
+    if (!ps.length) return;
+    const proto = ps[0].cloneNode(true);
+    ps.forEach(function (p) { p.remove(); });
+    lines.forEach(function (line) {
+      const p = proto.cloneNode(true);
+      const runs = Array.from(p.getElementsByTagNameNS(W, "r"));
+      runs.slice(1).forEach(function (r) { r.remove(); });
+      const ts = Array.from(p.getElementsByTagNameNS(W, "t"));
+      if (ts.length) {
+        ts[0].textContent = line;
+        ts[0].setAttribute("xml:space", "preserve");
+        ts.slice(1).forEach(function (t) { t.remove(); });
+      }
+      tc.appendChild(p);
+    });
+  }
+
+  async function generatePush() {
+    const term = (($("doc-term") || {}).value || "").trim();
+    if (!term) { alert("请先选择期次（寒假 / 暑期 / 春季学期中 / 秋季学期中），再生成招募推送"); return; }
+    const computed = lastComputed;
+    if (!computed || !computed.length) { alert("请先点击「生成预览」核对数据"); return; }
+    const PizZipCtor = window.PizZip;
+    if (!PizZipCtor) { alert("推送模板库未加载，请刷新页面后重试"); return; }
+    try {
+      const res = await fetch("templates/recruitment_template.docx", { cache: "no-cache" });
+      if (!res.ok) throw new Error("模板读取失败：HTTP " + res.status);
+      const zip = new PizZipCtor(await res.arrayBuffer());
+      const docFile = zip.file("word/document.xml");
+      if (!docFile) throw new Error("模板缺少 word/document.xml");
+      const W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+      const xml = new DOMParser().parseFromString(docFile.asText(), "application/xml");
+      if (xml.getElementsByTagName("parsererror").length) throw new Error("模板 XML 解析失败");
+
+      Array.from(xml.getElementsByTagNameNS(W, "t")).forEach(function (t) {
+        if (t.textContent.indexOf("{{term}}") >= 0) {
+          t.textContent = t.textContent.replace(/\{\{term\}\}/g, term);
+        }
+      });
+
+      const tbl = xml.getElementsByTagNameNS(W, "tbl")[0];
+      if (!tbl) throw new Error("模板缺少表格");
+      const trs = Array.from(tbl.getElementsByTagNameNS(W, "tr"));
+      if (trs.length < 2) throw new Error("模板缺少数据行");
+      const proto = trs[1].cloneNode(true);
+      trs.slice(1).forEach(function (tr) { tr.remove(); });
+
+      computed.forEach(function (t, i) {
+        const tr = proto.cloneNode(true);
+        const tcs = Array.from(tr.getElementsByTagNameNS(W, "tc"));
+        setPushCell(tcs[0], [String(i + 1)], W);
+        setPushCell(tcs[1], [String(t.B || "")], W);
+        setPushCell(tcs[2], [String(t.E || "")], W);
+        setPushCell(tcs[3], splitPushCompanies(t.C), W);
+        setPushCell(tcs[4], [String(t.D || "就协")], W);
+        tbl.appendChild(tr);
+      });
+
+      zip.file("word/document.xml", new XMLSerializer().serializeToString(xml));
+      const blob = zip.generate({
+        type: "blob",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      });
+      const year = (($("doc-year") || {}).value || String(new Date().getFullYear()));
+      downloadBlob(blob, `【就协】${year}${term}社会实践招募推送${computed.length}支.docx`);
+    } catch (e) {
+      alert("生成招募推送失败：" + (e && e.message ? e.message : e));
     }
   }
 
@@ -1215,6 +1305,7 @@ if (typeof document !== "undefined") {
     $("preview-btn").addEventListener("click", computeAll);
     $("generate").addEventListener("click", () => generate("xlsx"));
     $("generate-docx").addEventListener("click", () => generate("docx"));
+    if ($("generate-push")) $("generate-push").addEventListener("click", generatePush);
     if ($("budget-sync")) $("budget-sync").addEventListener("click", syncBudget);
     if ($("budget-load-refresh")) $("budget-load-refresh").addEventListener("click", refreshBudgetList);
     if ($("budget-load")) $("budget-load").addEventListener("click", loadBudgetFromSheet);
