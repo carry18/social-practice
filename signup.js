@@ -16,6 +16,7 @@
   var current = null;     // { dataUrl, base64 }
   var currentUrl = '';    // 当前期次生效的报名表链接
   var lastKey = null;     // 上一次生效的期次 key，避免 change 事件循环
+  var querySeq = 0;       // findForm 异步查询序号，防止快速切换期次时旧响应覆盖新状态
 
   /* ================= 支队数据 ================= */
   function teamsFromBudget() {
@@ -167,13 +168,50 @@
       currentUrl = rec.url;
       showQr(rec.url);
       setStatus('signup-create-status', '', false);
-    } else {
-      currentUrl = '';
-      hideQr();
-      setStatus('signup-create-status', '本期还没有报名表，点左侧按钮创建', true);
+      renderLink();
+      refreshButtons();
+      return;
     }
+    // 本地没记忆：主动问云函数这期是否已有表（只读，不会创建）
+    currentUrl = '';
+    hideQr();
     renderLink();
     refreshButtons();
+    queryRemoteForm(key, formName(v.year, v.term));
+  }
+
+  /* 只读查询：选中期次后自动看本期表是否已存在（兼容旧版函数：没有 findForm 就当不知道） */
+  function queryRemoteForm(key, name) {
+    var seq = ++querySeq;
+    setStatus('signup-create-status', '正在查询本期报名表…');
+    var headers = { 'Content-Type': 'application/json' };
+    var k = ($('signup-fn-key').value || '').trim();
+    if (k) headers['x-signup-key'] = k;
+    fetch(FN_URL, { method: 'POST', headers: headers, body: JSON.stringify({ action: 'findForm', name: name }) })
+      .then(function (r) { return r.json().then(function (d) { return { status: r.status, data: d }; }); })
+      .then(function (r) {
+        if (seq !== querySeq) return;   // 期间又切了期次，丢弃过期响应
+        var d = r.data || {};
+        if (r.status === 200 && d.exists && d.url) {
+          applyLink(d.url, '来自金数据（已存在）');
+          setStatus('signup-create-status', '✅ 本期报名表已存在，直接使用');
+        } else if (r.status === 404) {
+          setStatus('signup-create-status', '本期还没有报名表，点左侧按钮创建');
+        } else {
+          // 旧版函数不认识 findForm：退化为「点创建按钮，函数会自动复用」
+          setStatus('signup-create-status', '如已建过表，点左侧按钮会自动复用');
+        }
+        setStatusColorNeutral();
+      })
+      .catch(function () {
+        if (seq !== querySeq) return;
+        setStatus('signup-create-status', '查询失败，可直接点创建按钮（同名会自动复用）', true);
+      });
+  }
+
+  function setStatusColorNeutral() {
+    var el = $('signup-create-status');
+    if (el && !/^✅|^❌/.test(el.textContent)) el.style.color = '#b26a00';
   }
 
   function applyLink(url, src) {
