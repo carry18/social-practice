@@ -51,6 +51,29 @@
     return { dataUrl: dataUrl, base64: dataUrl.split(',')[1], modules: n, px: size };
   }
 
+  var lastCreated = '';   // 本轮由建表返回的链接，用于区分"自动"还是"手动"
+
+  function showUrlSrc() {
+    var el = $('signup-url-src');
+    if (!el) return;
+    var src = '';
+    try { src = localStorage.getItem('sj_signup_url_src') || ''; } catch (e) {}
+    el.textContent = ($('signup-url').value ? (src ? '（' + src + '）' : '') : '') + '改链接会自动更新二维码';
+  }
+
+  function clearLink(reason) {
+    $('signup-url').value = '';
+    current = null;
+    $('signup-qr-box').style.display = 'none';
+    try {
+      localStorage.removeItem('sj_signup_url');
+      localStorage.removeItem('sj_signup_url_src');
+    } catch (e) {}
+    showUrlSrc();
+    var st = $('signup-status');
+    if (st) { st.textContent = reason; st.style.color = '#b26a00'; }
+  }
+
   function showQr() {
     var url = ($('signup-url').value || '').trim();
     var status = $('signup-status');
@@ -65,6 +88,7 @@
       return;
     }
     try { localStorage.setItem('sj_signup_url', url); } catch (e) {}
+    showUrlSrc();
     $('signup-qr-img').src = current.dataUrl;
     $('signup-qr-dl').href = current.dataUrl;
     $('signup-qr-box').style.display = 'block';
@@ -168,6 +192,8 @@
     if ($('doc-term')) $('doc-term').value = $('signup-term').value;
     updateNamePreview();
     buildCommand();
+    // 每期一张表：期次一改，旧链接就不属于这一期了，必须清掉，避免推送里嵌上一期的码
+    if ($('signup-url').value) clearLink('期次已更改，请重新点「创建报名表」或粘贴新链接');
   }
 
   function syncSignupFromDoc() {
@@ -222,6 +248,7 @@
       .then(function (r) {
         var d = r.data || {};
         if (!d.url) throw new Error(d.error || ('HTTP ' + r.status));
+        lastCreated = d.url;
         $('signup-url').value = d.url;
         showQr();
         setCreateStatus((r.status === 409 ? '⚠️ 同名表已存在，已复用：' : '✅ 建表成功：') +
@@ -261,6 +288,7 @@
     // 链接一改就自动出码（防抖 300ms），不再需要单独点按钮
     var timer = null;
     $('signup-url').addEventListener('input', function () {
+      try { localStorage.setItem('sj_signup_url_src', '手动粘贴'); } catch (e) {}
       clearTimeout(timer);
       timer = setTimeout(function () {
         var v = ($('signup-url').value || '').trim();
