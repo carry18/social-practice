@@ -985,6 +985,39 @@ if (typeof document !== "undefined") {
     }
   }
 
+  /* 城市 → 省份（推送表格「地点」列加省名；直辖市留空） */
+  const CITY_PROVINCE = {
+    北京: "", 上海: "", 天津: "", 重庆: "",
+    沈阳: "辽宁", 大连: "辽宁", 长春: "吉林", 吉林: "吉林", 哈尔滨: "黑龙江", 大庆: "黑龙江",
+    济南: "山东", 青岛: "山东", 烟台: "山东", 潍坊: "山东",
+    南京: "江苏", 苏州: "江苏", 无锡: "江苏", 常州: "江苏", 南通: "江苏", 徐州: "江苏",
+    杭州: "浙江", 宁波: "浙江", 嘉兴: "浙江", 温州: "浙江",
+    合肥: "安徽", 芜湖: "安徽", 福州: "福建", 厦门: "福建", 泉州: "福建", 南昌: "江西",
+    郑州: "河南", 洛阳: "河南", 武汉: "湖北", 宜昌: "湖北", 长沙: "湖南", 株洲: "湖南",
+    广州: "广东", 深圳: "广东", 珠海: "广东", 东莞: "广东", 佛山: "广东", 汕头: "广东",
+    成都: "四川", 绵阳: "四川", 德阳: "四川", 宜宾: "四川", 西安: "陕西", 咸阳: "陕西",
+    兰州: "甘肃", 太原: "山西", 石家庄: "河北", 唐山: "河北", 保定: "河北",
+    昆明: "云南", 贵阳: "贵州", 南宁: "广西", 海口: "海南", 三亚: "海南",
+    呼和浩特: "内蒙古", 包头: "内蒙古", 乌鲁木齐: "新疆", 银川: "宁夏", 西宁: "青海", 拉萨: "西藏"
+  };
+
+  /* 「沈阳、长春」→「辽宁沈阳、吉林长春」；同省合并「辽宁沈阳、大连」；有未收录城市则原样返回 */
+  function pushPlace(B) {
+    const cities = String(B || "").split(/[、,，]+/).map(s => s.trim()).filter(Boolean);
+    if (!cities.length) return "";
+    const provs = cities.map(c => CITY_PROVINCE[c]);
+    if (provs.some(p => p === undefined)) return cities.join("、");
+    const uniq = [];
+    provs.forEach(p => { if (uniq.indexOf(p) < 0) uniq.push(p); });
+    if (uniq.length === 1) return (uniq[0] || "") + cities.join("、");
+    return cities.map((c, i) => (provs[i] || "") + c).join("、");
+  }
+
+  /* 推送里的日期统一用短横 – */
+  function pushDate(E) {
+    return String(E || "").replace(/[-—~～]/g, "–");
+  }
+
   function splitPushCompanies(C) {
     let parts = String(C || "").split(/[、,，;；\n]+/)
       .map(function (s) {
@@ -1079,10 +1112,10 @@ if (typeof document !== "undefined") {
         const tr = proto.cloneNode(true);
         const tcs = Array.from(tr.getElementsByTagNameNS(W, "tc"));
         setPushCell(tcs[0], [String(i + 1)], W);
-        setPushCell(tcs[1], [String(t.B || "")], W);
-        setPushCell(tcs[2], [String(t.E || "")], W);
-        setPushCell(tcs[3], splitPushCompanies(t.C), W);
-        setPushCell(tcs[4], [String(t.D || "就协")], W);
+        setPushCell(tcs[1], [pushPlace(t.B)], W);
+        setPushCell(tcs[2], [pushDate(t.E)], W);
+        const comps = splitPushCompanies(t.C).filter(Boolean);
+        setPushCell(tcs[3], comps.length ? [comps.join("、"), "……"] : [""], W);
         tbl.appendChild(tr);
       });
 
