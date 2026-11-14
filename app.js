@@ -1058,12 +1058,12 @@ if (typeof document !== "undefined") {
     return names;
   }
 
-  /* 推送企业列：统一前 4 家（简称），超过 4 家接「等」 */
+  /* 推送企业列：统一前 4 家（简称），超过 4 家接「等」（有「等」就不再另起「……」行） */
   function pushCompanyLines(C) {
     const names = splitPushCompanies(C);
     if (!names.length) return [""];
-    const line = names.length > 4 ? names.slice(0, 4).join("、") + "等" : names.join("、");
-    return [line, "……"];
+    if (names.length > 4) return [names.slice(0, 4).join("、") + "等"];
+    return [names.join("、"), "……"];
   }
 
   function setPushCell(tc, lines, W) {
@@ -1127,6 +1127,32 @@ if (typeof document !== "undefined") {
           t.textContent = t.textContent.replace(/\{\{term\}\}/g, term);
         }
       });
+
+      // 「前往各地开展为期5～7天左右」：按金山「拟参访日期」算出的天数改写
+      const dayList = computed.map(function (t) {
+        const d = Number(t.days) || parseDays(t.E) || 0;
+        return d;
+      }).filter(function (n) { return n > 0; });
+      if (dayList.length) {
+        const lo = Math.min.apply(null, dayList), hi = Math.max.apply(null, dayList);
+        const runs = Array.from(xml.getElementsByTagNameNS(W, "t"));
+        for (let i = 0; i < runs.length; i++) {
+          if (runs[i].textContent.indexOf("为期") < 0) continue;
+          // 紧随其后：数字段 → ～数字 段（可能跨多个 run，如 "～7"）
+          for (let j = i + 1; j < Math.min(i + 4, runs.length); j++) {
+            const txt = runs[j].textContent;
+            if (/^\d+$/.test(txt.trim())) {
+              runs[j].textContent = String(lo);
+              const nxt = runs[j + 1];
+              if (nxt && /^[～~\-–—]?\d+$/.test(nxt.textContent.trim())) {
+                nxt.textContent = hi > lo ? "～" + hi : "";
+              }
+              break;
+            }
+          }
+          break;
+        }
+      }
 
       try { if (window.EnterpriseData) await window.EnterpriseData.ensure(); } catch (e) { /* 用原文 */ }
       const tbl = xml.getElementsByTagNameNS(W, "tbl")[0];
