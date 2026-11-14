@@ -136,6 +136,47 @@
     } catch (e) {}
   }
 
+  function fillSignupYears() {
+    var y = $('signup-year'), src = $('doc-year');
+    if (!y || y.options.length) return;
+    var opts = [];
+    if (src && src.options.length) {
+      Array.prototype.forEach.call(src.options, function (o) { opts.push([o.value, o.textContent]); });
+    } else {
+      var now = new Date().getFullYear();
+      for (var i = now - 2; i <= now + 4; i++) opts.push([String(i), i + '年']);
+    }
+    opts.forEach(function (pair) {
+      var op = document.createElement('option');
+      op.value = pair[0]; op.textContent = pair[1];
+      y.appendChild(op);
+    });
+    y.value = (src && src.value) || String(new Date().getFullYear());
+  }
+
+  function updateNamePreview() {
+    var y = ($('signup-year') || {}).value || '';
+    var t = ($('signup-term') || {}).value || '';
+    var el = $('signup-name-preview');
+    if (!el) return;
+    el.textContent = (y && t) ? '将生成：' + y + '年' + t + '社会实践报名' : '';
+  }
+
+  // 报名面板的期次 → 同步回「预算编制」的下拉（推送文件名、下载标题都用它们）
+  function syncDocFromSignup() {
+    if ($('doc-year') && $('signup-year').value) $('doc-year').value = $('signup-year').value;
+    if ($('doc-term')) $('doc-term').value = $('signup-term').value;
+    updateNamePreview();
+    buildCommand();
+  }
+
+  function syncSignupFromDoc() {
+    if (!$('signup-term')) return;
+    if ($('doc-term')) $('signup-term').value = $('doc-term').value;
+    if ($('doc-year') && $('doc-year').value) $('signup-year').value = $('doc-year').value;
+    updateNamePreview();
+  }
+
   function needTerm() {
     var term = (($('doc-term') || {}).value || '').trim();
     if (!term) throw new Error('请先在「预算编制」里选择期次');
@@ -205,6 +246,15 @@
     var cfg = savedConfig();
     $('signup-fn-url').value = cfg.url || DEFAULT_FN;
     if (cfg.key) $('signup-fn-key').value = cfg.key;
+
+    fillSignupYears();
+    syncSignupFromDoc();
+    updateNamePreview();
+    $('signup-year').addEventListener('change', syncDocFromSignup);
+    $('signup-term').addEventListener('change', syncDocFromSignup);
+    ['doc-year', 'doc-term'].forEach(function (id) {
+      if ($(id)) $(id).addEventListener('change', syncSignupFromDoc);
+    });
 
     $('signup-create').addEventListener('click', createForm);
 

@@ -406,6 +406,19 @@
       <p class="hint">报名表由<b>云函数</b>创建：Token 存在函数环境变量里，页面永远拿不到。
         地址已内置，直接点按钮即可；建完自动回填链接并生成二维码。<b>这一期已有表的话，跳过本卡片。</b></p>
       <p class="hint" style="margin:10px 0">
+        <label>期次
+          <select id="signup-year" style="padding:4px 6px;font-size:13px"></select>
+          <select id="signup-term" style="padding:4px 6px;font-size:13px">
+            <option value="">请选择</option>
+            <option value="寒假">寒假</option>
+            <option value="暑期">暑期</option>
+            <option value="春季学期中">春季学期中</option>
+            <option value="秋季学期中">秋季学期中</option>
+          </select>
+        </label>
+        <span id="signup-name-preview" class="hint" style="margin-left:10px"></span>
+      </p>
+      <p class="hint" style="margin:10px 0">
         <label>云函数地址
           <input id="signup-fn-url" placeholder="https://xxxx.ap-shanghai.tencentscf.com/" style="width:320px;padding:4px 6px;font-size:13px">
         </label>
@@ -457,7 +470,7 @@
 <script src="https://cdn.jsdelivr.net/npm/pizzip@3.1.7/dist/pizzip.min.js"></script>
 <script src="app.js?v=20261130"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
-<script src="signup.js?v=202611302"></script>
+<script src="signup.js?v=202611303"></script>
 <script src="enterprise.js?v=20261112"></script>
 <script src="payout.js?v=20261118"></script>
 <script src="note.js?v=20261105m"></script>
