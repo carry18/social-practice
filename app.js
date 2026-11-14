@@ -677,6 +677,7 @@ if (typeof document !== "undefined") {
   window.BudgetBridge = {
     getRow(i) { return teams[i] || null; },
     rowCount() { return teams.length; },
+    getTeams() { return teams.map(t => ({ B: t.B, C: t.C, D: t.D, E: t.E, F: t.F, H: t.H })); },
     setPoint(i, value) {
       if (!teams[i]) return;
       teams[i].C = value;
@@ -1046,7 +1047,27 @@ if (typeof document !== "undefined") {
     });
   }
 
-  async function generatePush(list) {
+  /* 把推送里的二维码图片换成新的，并按倍数放大显示尺寸（wp:extent / a:ext 同步改） */
+  function embedQr(zip, jpegBase64, scale) {
+    const box = (zip.file("word/media/image1.jpeg") || zip.file("word/media/image1.png"));
+    if (!box) throw new Error("推送模板里没有二维码图片（word/media/image1.*）");
+    const target = box.name;
+    zip.file(target, jpegBase64, { base64: true });
+
+    if (scale && Math.abs(scale - 1) > 0.001) {
+      const doc = zip.file("word/document.xml");
+      const scaleAttr = (m, head, cx, mid, cy, tail) =>
+        head + Math.round(+cx * scale) + mid + Math.round(+cy * scale) + tail;
+      const out = doc.asText()
+        .replace(/(<wp:extent cx=")(\d+)(" cy=")(\d+)(")/g, scaleAttr)
+        .replace(/(<a:ext cx=")(\d+)(" cy=")(\d+)(")/g, scaleAttr);
+      zip.file("word/document.xml", out);
+    }
+    return target;
+  }
+
+  async function generatePush(list, opts) {
+    const o = opts || {};
     const term = (($("doc-term") || {}).value || "").trim();
     if (!term) { alert("请先选择期次（寒假 / 暑期 / 春季学期中 / 秋季学期中），再生成招募推送"); return; }
     const computed = list || lastComputed;
@@ -1089,16 +1110,27 @@ if (typeof document !== "undefined") {
       });
 
       zip.file("word/document.xml", new XMLSerializer().serializeToString(xml));
+      if (o.qrJpeg) embedQr(zip, o.qrJpeg, o.scale || 1);
       const blob = zip.generate({
         type: "blob",
         mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
       });
       const year = (($("doc-year") || {}).value || String(new Date().getFullYear()));
-      downloadBlob(blob, `【就协】${year}${term}社会实践招募推送${computed.length}支.docx`);
+      downloadBlob(blob, o.filename || `【就协】${year}${term}社会实践招募推送${computed.length}支.docx`);
     } catch (e) {
       alert("生成招募推送失败：" + (e && e.message ? e.message : e));
     }
   }
+
+  // 供 signup.js（报名推送面板）调用：直接传支队列表，不依赖 lastComputed
+  window.SJ_PUSH = {
+    async generate(opts) {
+      const o = opts || {};
+      if (!(($("doc-term") || {}).value || "").trim()) throw new Error("请先在「预算编制」里选择期次");
+      if (!o.list || !o.list.length) throw new Error("没有支队数据");
+      return generatePush(o.list, o);
+    }
+  };
 
   function termFromName(name) {
     const s = String(name || "");
@@ -1422,7 +1454,7 @@ if (typeof document !== "undefined") {
     $("preview-btn").addEventListener("click", computeAll);
     $("generate").addEventListener("click", () => generate("xlsx"));
     $("generate-docx").addEventListener("click", () => generate("docx"));
-    if ($("generate-push")) $("generate-push").addEventListener("click", generatePush);
+    if ($("generate-push")) $("generate-push").addEventListener("click", () => generatePush());
     if ($("budget-sync")) $("budget-sync").addEventListener("click", syncBudget);
     if ($("budget-load-refresh")) $("budget-load-refresh").addEventListener("click", refreshBudgetList);
     if ($("budget-hide-summary")) $("budget-hide-summary").addEventListener("change", refreshBudgetList);

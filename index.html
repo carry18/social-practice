@@ -169,6 +169,7 @@
   <button class="side-btn active" data-view="overview">📊 总览监控</button>
   <button class="side-btn" data-view="budget">📝 预算编制</button>
   <button class="side-btn" data-view="payout">💰 决算打款</button>
+  <button class="side-btn" data-view="signup">📮 报名推送</button>
   <a class="side-btn" href="map.html" target="_blank" rel="noopener">🗺️ 地图（新窗口）</a>
 </aside>
 
@@ -368,6 +369,60 @@
   </div>
   </section>
 
+  <!-- ================= 模块五：报名推送 ================= -->
+  <section id="view-signup" hidden>
+    <div class="card">
+      <h2>⑤ 报名：表单链接 → 二维码 → 推送</h2>
+      <p class="hint">在「预算编制」里录入支队并生成预览后，到这一步填报名表链接：生成二维码 → 下载带二维码的招募推送 Word。</p>
+      <p class="hint" style="margin:10px 0">
+        <label>报名表链接
+          <input id="signup-url" placeholder="https://fojtp5p4.jsjform.com/f/QcMAb9" style="width:360px;padding:4px 6px;font-size:13px">
+        </label>
+        <button class="btn secondary" id="signup-qr-btn" type="button">生成二维码</button>
+      </p>
+      <div id="signup-qr-box" style="display:none">
+        <img id="signup-qr-img" alt="报名二维码" style="width:180px;height:180px;border:1px solid #eee;border-radius:6px">
+        <div class="hint" style="margin-top:6px">
+          <span id="signup-qr-note"></span> ·
+          <a id="signup-qr-dl" download="报名二维码.jpg">下载二维码 JPG</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>推送里的支队表（取自「预算编制」）</h2>
+      <table id="signup-teams">
+        <thead><tr><th>序号</th><th>地点</th><th>拟参访时间</th><th>拟主要参访</th><th>承办院系</th></tr></thead>
+        <tbody id="signup-teams-body"></tbody>
+      </table>
+      <div style="margin-top:12px">
+        <button class="btn" id="signup-push">⬇️ 下载推送 Word（含二维码）</button>
+      </div>
+      <div id="signup-status" style="font-size:13px;margin-top:10px"></div>
+    </div>
+
+    <div class="card">
+      <h2>创建报名表（金数据）</h2>
+      <p class="hint">报名表由<b>云函数</b>创建：Token 存在函数环境变量里，页面永远拿不到。
+        填好下面的函数地址即可一键建表，建完自动回填链接并生成二维码。</p>
+      <p class="hint" style="margin:10px 0">
+        <label>云函数地址
+          <input id="signup-fn-url" placeholder="https://xxxx.ap-shanghai.tencentscf.com/" style="width:320px;padding:4px 6px;font-size:13px">
+        </label>
+        <label style="margin-left:10px">口令
+          <input id="signup-fn-key" type="password" placeholder="函数未设 SIGNUP_KEY 可留空" style="width:150px;padding:4px 6px;font-size:13px">
+        </label>
+      </p>
+      <button class="btn" id="signup-create">🚀 创建报名表</button>
+      <div id="signup-create-status" style="font-size:13px;margin-top:10px"></div>
+      <details style="margin-top:14px">
+        <summary class="hint" style="cursor:pointer">没有云函数？用本机命令行建表</summary>
+        <pre id="signup-cmd" style="background:#f7f5fa;border-radius:6px;padding:10px;font-size:12px;overflow:auto;user-select:all;margin-top:8px"></pre>
+        <button class="btn secondary" id="signup-copy" type="button">复制命令</button>
+      </details>
+    </div>
+  </section>
+
 </main>
 </div><!-- /layout -->
 <footer>数据不出浏览器：所有计算与文件生成均在本地完成 ｜ 票价库由实践部每期预算前刷新</footer>
@@ -375,7 +430,7 @@
 <script>
 (function () {
   var btns = Array.prototype.slice.call(document.querySelectorAll('aside.side .side-btn[data-view]'));
-  var views = { overview: 'view-overview', budget: 'view-budget', payout: 'view-payout' };
+  var views = { overview: 'view-overview', budget: 'view-budget', payout: 'view-payout', signup: 'view-signup' };
   function show(v) {
     if (!views[v]) v = 'budget';
     Object.keys(views).forEach(function (k) {
@@ -400,7 +455,9 @@
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 <script src="overview.js?v=20261120"></script>
 <script src="https://cdn.jsdelivr.net/npm/pizzip@3.1.7/dist/pizzip.min.js"></script>
-<script src="app.js?v=20261129"></script>
+<script src="app.js?v=20261130"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script src="signup.js?v=20261130"></script>
 <script src="enterprise.js?v=20261112"></script>
 <script src="payout.js?v=20261118"></script>
 <script src="note.js?v=20261105m"></script>
