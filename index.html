@@ -372,41 +372,12 @@
   <!-- ================= 模块五：报名推送 ================= -->
   <section id="view-signup" hidden>
     <div class="card">
-      <h2>⑤ 报名：表单链接 → 二维码 → 推送</h2>
-      <p class="hint">在「预算编制」里录入支队并生成预览后，到这一步填报名表链接：生成二维码 → 下载带二维码的招募推送 Word。</p>
-      <p class="hint" style="margin:10px 0">
-        <label>报名表链接
-          <input id="signup-url" placeholder="点下方「创建/复用报名表」自动填入，也可手动粘贴" style="width:360px;padding:4px 6px;font-size:13px">
-        </label>
-        <span class="hint" id="signup-url-src"></span>
-      </p>
-      <div id="signup-qr-box" style="display:none">
-        <img id="signup-qr-img" alt="报名二维码" style="width:180px;height:180px;border:1px solid #eee;border-radius:6px">
-        <div class="hint" style="margin-top:6px">
-          <span id="signup-qr-note"></span> ·
-          <a id="signup-qr-dl" download="报名二维码.jpg">下载二维码 JPG</a>
-        </div>
-      </div>
-    </div>
+      <h2>报名推送：期次 → 建表 → 二维码 → 推送 Word</h2>
+      <p class="hint">选好期次点创建，二维码和推送会自动就位。支队信息在「预算编制」里录入。</p>
 
-    <div class="card">
-      <h2>推送里的支队表（取自「预算编制」）</h2>
-      <table id="signup-teams">
-        <thead><tr><th>序号</th><th>地点</th><th>拟参访时间</th><th>拟主要参访</th><th>承办院系</th></tr></thead>
-        <tbody id="signup-teams-body"></tbody>
-      </table>
-      <div style="margin-top:12px">
-        <button class="btn" id="signup-push">⬇️ 下载推送 Word（含二维码）</button>
-      </div>
-      <div id="signup-status" style="font-size:13px;margin-top:10px"></div>
-    </div>
-
-    <div class="card">
-      <h2>创建报名表（金数据）</h2>
-      <p class="hint">报名表由<b>云函数</b>创建：Token 存在函数环境变量里，页面永远拿不到。
-        地址已内置，直接点按钮即可；建完自动回填链接并生成二维码。<b>这一期已有表的话，跳过本卡片。</b></p>
-      <p class="hint" style="margin:10px 0">
-        <label>期次
+      <h3 style="font-size:14px;margin:16px 0 6px">① 选期次，创建/复用报名表</h3>
+      <p style="margin:6px 0">
+        <label class="hint">期次
           <select id="signup-year" style="padding:4px 6px;font-size:13px"></select>
           <select id="signup-term" style="padding:4px 6px;font-size:13px">
             <option value="">请选择</option>
@@ -418,24 +389,50 @@
         </label>
         <span id="signup-name-preview" class="hint" style="margin-left:10px"></span>
       </p>
-      <details style="margin:8px 0">
-        <summary class="hint" style="cursor:pointer;color:#8a8a8a">高级设置（云函数地址 / 口令，一般不用改）</summary>
-        <p class="hint" style="margin:8px 0">
-          <label>云函数地址
-            <input id="signup-fn-url" placeholder="https://xxxx.ap-shanghai.tencentscf.com/" style="width:320px;padding:4px 6px;font-size:13px">
-          </label>
-          <label style="margin-left:10px">口令
-            <input id="signup-fn-key" type="password" placeholder="函数未设 SIGNUP_KEY 可留空" style="width:150px;padding:4px 6px;font-size:13px">
+      <button class="btn" id="signup-create" disabled>🚀 创建/复用报名表</button>
+      <span id="signup-create-status" style="font-size:13px;margin-left:10px"></span>
+
+      <h3 style="font-size:14px;margin:20px 0 6px">② 二维码（自动生成）</h3>
+      <p class="hint" style="margin:6px 0">报名表链接
+        <span id="signup-url-text" style="font-size:13px;word-break:break-all"></span>
+        <button class="btn secondary" id="signup-copy-url" type="button" style="padding:2px 10px;font-size:12px" hidden>复制</button>
+        <span id="signup-url-src" class="hint"></span>
+      </p>
+      <div id="signup-qr-box" style="display:none">
+        <img id="signup-qr-img" alt="报名二维码" style="width:180px;height:180px;border:1px solid #eee;border-radius:6px">
+        <div class="hint" style="margin-top:6px">已生成，可直接用于推送 ·
+          <a id="signup-qr-dl" download="报名二维码.jpg">下载二维码 JPG</a>
+        </div>
+      </div>
+
+      <h3 style="font-size:14px;margin:20px 0 6px">③ 核对支队表，下载推送（改动去「预算编制」）</h3>
+      <table id="signup-teams">
+        <thead><tr><th>序号</th><th>地点</th><th>拟参访时间</th><th>拟主要参访</th><th>承办院系</th></tr></thead>
+        <tbody id="signup-teams-body"></tbody>
+      </table>
+      <div style="margin-top:12px">
+        <button class="btn" id="signup-push" disabled>⬇️ 下载推送 Word（含二维码）</button>
+        <span id="signup-status" style="font-size:13px;margin-left:10px"></span>
+      </div>
+
+      <details style="margin-top:20px">
+        <summary class="hint" style="cursor:pointer;color:#8a8a8a">高级设置（一般不用动）</summary>
+        <p class="hint" style="margin:10px 0">
+          <label>口令
+            <input id="signup-fn-key" placeholder="函数设了 SIGNUP_KEY 才需要填" style="width:220px;padding:4px 6px;font-size:13px">
           </label>
         </p>
+        <p class="hint" style="margin:10px 0">
+          <label>其它渠道已建好本期报名表？粘贴链接
+            <input id="signup-url-manual" placeholder="https://…/f/xxxx" style="width:300px;padding:4px 6px;font-size:13px">
+          </label>
+          <button class="btn secondary" id="signup-use-manual" type="button">使用该链接</button>
+          <span id="signup-manual-hint" style="font-size:12px;margin-left:8px"></span>
+        </p>
+        <p class="hint" style="margin:10px 0">没有云函数时：维护者在本机 <code>自动化/报名/</code> 下执行 <code>create_form.py</code> 建表，再把链接贴到上面。</p>
       </details>
-      <button class="btn" id="signup-create">🚀 创建报名表</button>
-      <div id="signup-create-status" style="font-size:13px;margin-top:10px"></div>
-      <details style="margin-top:14px">
-        <summary class="hint" style="cursor:pointer">没有云函数？用本机命令行建表</summary>
-        <pre id="signup-cmd" style="background:#f7f5fa;border-radius:6px;padding:10px;font-size:12px;overflow:auto;user-select:all;margin-top:8px"></pre>
-        <button class="btn secondary" id="signup-copy" type="button">复制命令</button>
-      </details>
+    </div>
+  </section>
     </div>
   </section>
 
@@ -473,7 +470,7 @@
 <script src="https://cdn.jsdelivr.net/npm/pizzip@3.1.7/dist/pizzip.min.js"></script>
 <script src="app.js?v=20261130"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
-<script src="signup.js?v=202611305"></script>
+<script src="signup.js?v=202611306"></script>
 <script src="enterprise.js?v=20261112"></script>
 <script src="payout.js?v=20261118"></script>
 <script src="note.js?v=20261105m"></script>
