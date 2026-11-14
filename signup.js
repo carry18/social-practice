@@ -64,6 +64,7 @@
       alert(e.message);
       return;
     }
+    try { localStorage.setItem('sj_signup_url', url); } catch (e) {}
     $('signup-qr-img').src = current.dataUrl;
     $('signup-qr-dl').href = current.dataUrl;
     $('signup-qr-box').style.display = 'block';
@@ -205,8 +206,24 @@
     $('signup-fn-url').value = cfg.url || DEFAULT_FN;
     if (cfg.key) $('signup-fn-key').value = cfg.key;
 
-    $('signup-qr-btn').addEventListener('click', showQr);
     $('signup-create').addEventListener('click', createForm);
+
+    // 链接一改就自动出码（防抖 300ms），不再需要单独点按钮
+    var timer = null;
+    $('signup-url').addEventListener('input', function () {
+      clearTimeout(timer);
+      timer = setTimeout(function () {
+        var v = ($('signup-url').value || '').trim();
+        if (!v) { $('signup-qr-box').style.display = 'none'; return; }
+        showQr();
+      }, 300);
+    });
+
+    // 上次用过的链接：刷新后自动回填并出码
+    try {
+      var last = localStorage.getItem('sj_signup_url');
+      if (last) { $('signup-url').value = last; showQr(); }
+    } catch (e) {}
     $('signup-push').addEventListener('click', downloadPush);
     $('signup-copy').addEventListener('click', function () {
       var txt = $('signup-cmd').textContent;
