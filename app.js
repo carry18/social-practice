@@ -1116,6 +1116,7 @@ if (typeof document !== "undefined") {
         setPushCell(tcs[2], [pushDate(t.E)], W);
         const comps = splitPushCompanies(t.C).filter(Boolean);
         setPushCell(tcs[3], comps.length ? [comps.join("、"), "……"] : [""], W);
+        setPushCell(tcs[4], [String(t.D || "就协")], W);
         tbl.appendChild(tr);
       });
 
