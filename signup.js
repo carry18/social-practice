@@ -27,16 +27,62 @@
     try { return JSON.parse(localStorage.getItem('sj_signup_teams') || '{}'); } catch (e) { return {}; }
   }
   function getTermTeams(key) { return key ? (loadTeamsMap()[key] || null) : null; }
-  function saveTermTeams(key, rows, src) {
+  function saveTermTeams(key, rows, src, keep) {
     if (!key) return;
     var m = loadTeamsMap();
-    m[key] = { rows: rows, src: src };
+    var old = m[key] || {};
+    m[key] = {
+      rows: rows, src: src,
+      off: keep ? (old.off || []) : (keep === false ? [] : (old.off || [])),
+      on:  keep ? (old.on  || []) : (keep === false ? [] : (old.on  || []))
+    };
     try { localStorage.setItem('sj_signup_teams', JSON.stringify(m)); } catch (e) {}
   }
-  function currentTeams() {
+  function saveTermFlags(key, off, on) {
+    if (!key) return;
+    var m = loadTeamsMap();
+    if (!m[key]) return;
+    m[key].off = off; m[key].on = on;
+    try { localStorage.setItem('sj_signup_teams', JSON.stringify(m)); } catch (e) {}
+  }
+  function currentRec() {
     var v = termVal();
-    var rec = getTermTeams(termKey(v.year, v.term));
+    return getTermTeams(termKey(v.year, v.term));
+  }
+  function currentTeams() {
+    var rec = currentRec();
     return rec ? rec.rows : [];
+  }
+
+  /* 拟参访时间「11.24-11.27」→ 结束日期；年份推断：早于今天 200 天以上则算明年（寒假跨年） */
+  function tripEndDate(t, year) {
+    var m = String(t.E || '').match(/(\d{1,2})\.(\d{1,2})(?:\s*[-–—~至]\s*(?:(\d{1,2})\.)?(\d{1,2}))?/);
+    if (!m) return null;
+    var mo = m[3] ? +m[3] : +m[1], d = m[4] ? +m[4] : +m[2];
+    var dt = new Date(+year, mo - 1, d);
+    var past = new Date(); past.setHours(0, 0, 0, 0); past.setDate(past.getDate() - 200);
+    if (dt < past) dt.setFullYear(dt.getFullYear() + 1);
+    return dt;
+  }
+  function isDeparted(t, year) {
+    var e = tripEndDate(t, year);
+    if (!e) return false;
+    var today = new Date(); today.setHours(0, 0, 0, 0);
+    return e < today;
+  }
+  /* 行状态：off=手动移除，departed=已出发（可手动恢复），active=有效 */
+  function rowState(rec, t, year) {
+    var b = String(t.B || '');
+    if (rec && (rec.off || []).indexOf(b) >= 0) return 'off';
+    if (rec && (rec.on  || []).indexOf(b) >= 0) return 'active';
+    return isDeparted(t, year) ? 'departed' : 'active';
+  }
+  /* 有效支队 = 没移除、没出发（或手动恢复）的 */
+  function activeTeams() {
+    var v = termVal();
+    var rec = currentRec();
+    if (!rec) return [];
+    return rec.rows.filter(function (t) { return rowState(rec, t, v.year) === 'active'; });
   }
 
   /* 从金山读某一期的预算表（表名约定：2026秋季学期中预算） */
@@ -68,7 +114,7 @@
     readKingsoftTeams(year, term).then(function (r) {
       if (seq !== teamsSeq) return;
       if (!r.rows.length) throw new Error('empty');
-      saveTermTeams(key, r.rows, '金山「' + r.sheet + '」');
+      saveTermTeams(key, r.rows, '金山「' + r.sheet + '」', true);
       renderTeams(r.rows, '金山「' + r.sheet + '」');
     }).catch(function () {
       if (seq !== teamsSeq) return;
@@ -86,22 +132,52 @@
       var msg = termKey(v.year, v.term)
         ? (src || '本期还没有支队数据')
         : '先选期次';
-      tb.innerHTML = '<tr><td colspan="5" class="hint"' + (loading ? '' : ' style="color:#b26a00"') + '>' + msg + '</td></tr>';
-      if (srcEl) srcEl.textContent = loading ? '' : '';
+      tb.innerHTML = '<tr><td colspan="6" class="hint"' + (loading ? '' : ' style="color:#b26a00"') + '>' + msg + '</td></tr>';
+      if (srcEl) srcEl.textContent = '';
       refreshButtons();
       return;
     }
+    var v2 = termVal();
+    var rec = currentRec() || {};
+    var nActive = 0;
     rows.forEach(function (t, i) {
+      var st = rowState(rec, t, v2.year);
+      if (st === 'active') nActive++;
       var tr = document.createElement('tr');
+      if (st !== 'active') tr.style.cssText = 'color:#999;background:#fafafa';
+      var tag = st === 'departed' ? ' <span style="color:#b26a00">（已出发）</span>'
+              : st === 'off' ? ' <span style="color:#999">（已移除）</span>' : '';
+      var btn = st === 'active'
+        ? '<a href="javascript:void 0" data-act="off" data-b="' + String(t.B || '').replace(/"/g, '&quot;') + '" style="color:#999;font-size:12px">移除</a>'
+        : '<a href="javascript:void 0" data-act="on" data-b="' + String(t.B || '').replace(/"/g, '&quot;') + '" style="font-size:12px">恢复</a>';
       tr.innerHTML = '<td>' + (i + 1) + '</td>' +
-        '<td>' + String(t.B || '').replace(/</g, '&lt;') + '</td>' +
+        '<td>' + String(t.B || '').replace(/</g, '&lt;') + tag + '</td>' +
         '<td>' + String(t.E || '') + '</td>' +
         '<td>' + String(t.C || '').replace(/</g, '&lt;') + '</td>' +
-        '<td>' + String(t.D || '') + '</td>';
+        '<td>' + String(t.D || '') + '</td>' +
+        '<td>' + btn + '</td>';
       tb.appendChild(tr);
     });
-    if (srcEl) srcEl.textContent = src ? '（来源：' + src + '）' : '';
+    if (srcEl) srcEl.textContent = (src ? '（来源：' + src : '（') +
+      '；有效 ' + nActive + '/' + rows.length + ' 支）';
     refreshButtons();
+  }
+
+  /* 移除/恢复点击（事件代理） */
+  function onTeamsClick(e) {
+    var a = e.target && e.target.closest ? e.target.closest('a[data-act]') : null;
+    if (!a) return;
+    var v = termVal();
+    var key = termKey(v.year, v.term);
+    var rec = getTermTeams(key);
+    if (!rec) return;
+    var b = a.getAttribute('data-b');
+    var off = (rec.off || []).filter(function (x) { return x !== b; });
+    var on = (rec.on || []).filter(function (x) { return x !== b; });
+    if (a.getAttribute('data-act') === 'off') off.push(b); else on.push(b);
+    saveTermFlags(key, off, on);
+    renderTeams(rec.rows, rec.src, false);
+    setStatus('signup-status', '', false);
   }
 
   /* ================= 二维码 ================= */
@@ -201,7 +277,9 @@
     var v = termVal();
     var hasTerm = !!termKey(v.year, v.term);
     if ($('signup-create')) $('signup-create').disabled = !hasTerm;
-    if ($('signup-push')) $('signup-push').disabled = !(hasTerm && current && currentTeams().length);
+    var nActive = activeTeams().length;
+    if ($('signup-push')) $('signup-push').disabled = !(hasTerm && current && nActive);
+    if ($('signup-sync-choices')) $('signup-sync-choices').disabled = !(hasTerm && current && nActive);
   }
 
   /* 期次切换：保存旧期次链接 → 恢复新期次链接（或清空） */
@@ -316,8 +394,8 @@
   function createForm() {
     var v = termVal();
     if (!termKey(v.year, v.term)) return;   // 按钮已置灰，双保险
-    var rows = currentTeams();
-    if (!rows.length) { setStatus('signup-create-status', '本期还没有支队数据（见③的提示）', true); return; }
+    var rows = activeTeams();
+    if (!rows.length) { setStatus('signup-create-status', '本期没有有效支队（都已出发或被移除，见③）', true); return; }
 
     var payload = {
       action: 'createForm',
@@ -352,7 +430,7 @@
 
   /* ================= 下载推送 ================= */
   function downloadPush() {
-    var rows = currentTeams();
+    var rows = activeTeams();
     if (!rows.length || !current) return;   // 按钮已置灰，双保险
     if (!window.SJ_PUSH) { setStatus('signup-status', '❌ app.js 未暴露 SJ_PUSH，请刷新页面', true); return; }
 
@@ -368,6 +446,43 @@
     }).catch(function (e) {
       setStatus('signup-status', '❌ ' + (e && e.message ? e.message : e), true);
     });
+  }
+
+  /* ================= 同步选项到报名表 ================= */
+  function syncChoices() {
+    var v = termVal();
+    if (!currentUrl) return;
+    var rows = activeTeams();
+    if (!rows.length) { setStatus('signup-status', '本期没有有效支队', true); return; }
+    var btn = $('signup-sync-choices');
+    btn.disabled = true;
+    setStatus('signup-status', '正在同步报名表选项…');
+    fetch(FN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'syncTeams',
+        name: formName(v.year, v.term),
+        teams: rows.map(function (r, i) {
+          return {
+            label: (i + 1) + '. ' + String(r.B || '') + (r.E ? ' ' + r.E : '') + (r.D ? ' ' + r.D : ''),
+            people: Number(r.F) || 0
+          };
+        })
+      })
+    })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+      .then(function (res) {
+        if (!res.ok) {
+          setStatus('signup-status', '❌ ' + (res.d.error || '同步失败'), true);
+          return;
+        }
+        setStatus('signup-status', res.d.changed === false
+          ? '✅ 报名表选项已是最新（' + res.d.total + ' 支）'
+          : '✅ 已同步：新增 ' + res.d.added + ' 项，移除 ' + res.d.removed + ' 项，现存 ' + res.d.total + ' 支');
+      })
+      .catch(function () { setStatus('signup-status', '❌ 网络错误：同步失败', true); })
+      .finally(function () { refreshButtons(); });
   }
 
   /* ================= 初始化 ================= */
@@ -404,6 +519,10 @@
 
     $('signup-create').addEventListener('click', createForm);
     $('signup-push').addEventListener('click', downloadPush);
+    var sc = $('signup-sync-choices');
+    if (sc) sc.addEventListener('click', syncChoices);
+    var tb = $('signup-teams-body');
+    if (tb) tb.addEventListener('click', onTeamsClick);
 
     $('signup-copy-url').addEventListener('click', function () {
       if (!currentUrl || !navigator.clipboard) return;
