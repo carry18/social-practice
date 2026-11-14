@@ -1145,7 +1145,18 @@ if (typeof document !== "undefined") {
               runs[j].textContent = String(lo);
               const nxt = runs[j + 1];
               if (nxt && /^[～~\-–—]?\d+$/.test(nxt.textContent.trim())) {
-                nxt.textContent = hi > lo ? "～" + hi : "";
+                if (hi > lo) {
+                  nxt.textContent = "～" + hi;
+                } else {
+                  // 只有单个数字 = 精确天数，去掉「左右」
+                  nxt.textContent = "";
+                  for (let k = j + 2; k < Math.min(j + 5, runs.length); k++) {
+                    if (/左右/.test(runs[k].textContent)) {
+                      runs[k].textContent = runs[k].textContent.replace(/天左右/, "天").replace(/左右/, "");
+                      break;
+                    }
+                  }
+                }
               }
               break;
             }
