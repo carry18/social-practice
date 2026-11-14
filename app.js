@@ -1128,6 +1128,23 @@ if (typeof document !== "undefined") {
         }
       });
 
+      // 「优先有赴目的城市就业意向的2027届毕业生」：届别 = 实践年份 + 1（2026 年 → 2027 届）
+      // 模板里年份被拆成两个 run（"202" + "7"），这里合并成一个再写
+      const termYear = Number((($("doc-year") || {}).value) || 0) || new Date().getFullYear();
+      const gradYear = String(termYear + 1);
+      const yrRuns = Array.from(xml.getElementsByTagNameNS(W, "t"));
+      for (let i = 1; i < yrRuns.length; i++) {
+        const cur = yrRuns[i].textContent;
+        const prevTxt = yrRuns[i - 1].textContent;
+        const nextTxt = yrRuns[i + 1] ? yrRuns[i + 1].textContent : "";
+        if (/^\d$/.test(cur.trim()) && /^届/.test(nextTxt.trim()) && /\d{3}$/.test(prevTxt)) {
+          yrRuns[i - 1].textContent = prevTxt.replace(/\d{3}$/, "") + gradYear;
+          yrRuns[i].textContent = "";
+        } else if (/\d{4}届/.test(cur)) {
+          yrRuns[i].textContent = cur.replace(/\d{4}届/, gradYear + "届");
+        }
+      }
+
       // 「前往各地开展为期5～7天左右」：按金山「拟参访日期」算出的天数改写
       const dayList = computed.map(function (t) {
         const d = Number(t.days) || parseDays(t.E) || 0;
