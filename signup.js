@@ -6,6 +6,7 @@
 (function () {
   'use strict';
 
+  var DEFAULT_FN = 'https://1386267309-knom92xprw.ap-shanghai.tencentscf.com';  // 建表云函数（地址公开，无口令）
   var QR_BORDER = 3;      // 白边模块数（标准是 4，3 是为了把码印得大一点）
   var QR_PX = 900;
   var SCALE = 1.05;       // 图片显示尺寸倍数（与 Python 工具一致，码面约 4.0cm）
@@ -201,7 +202,7 @@
     buildCommand();
 
     var cfg = savedConfig();
-    if (cfg.url) $('signup-fn-url').value = cfg.url;
+    $('signup-fn-url').value = cfg.url || DEFAULT_FN;
     if (cfg.key) $('signup-fn-key').value = cfg.key;
 
     $('signup-qr-btn').addEventListener('click', showQr);
