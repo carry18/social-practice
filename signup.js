@@ -8,6 +8,7 @@
   'use strict';
 
   var FN_URL = 'https://1386267309-knom92xprw.ap-shanghai.tencentscf.com';  // 建表云函数（地址公开，无口令）
+  var SYNC_HOOK = 'https://1386267309-3bh6z757na.ap-shanghai.tencentscf.com'; // 金山预算表读写（与 app.js 同一个）
   var QR_BORDER = 3;      // 白边模块数（标准是 4，3 是为了把码印得大一点）
   var QR_PX = 900;
   var SCALE = 1.05;       // 图片显示尺寸倍数（与 Python 工具一致，码面约 4.0cm）
@@ -18,23 +19,75 @@
   var lastKey = null;     // 上一次生效的期次 key，避免 change 事件循环
   var querySeq = 0;       // findForm 异步查询序号，防止快速切换期次时旧响应覆盖新状态
 
-  /* ================= 支队数据 ================= */
-  function teamsFromBudget() {
-    if (window.BudgetBridge && window.BudgetBridge.getTeams) {
-      return (window.BudgetBridge.getTeams() || []).filter(function (t) {
-        return String(t.B || '').trim();
-      });
-    }
-    return [];
+  /* ================= 支队数据（按期次记忆，金山优先） ================= */
+  var teamsSeq = 0;   // 支队异步读取序号，防快速切期次串数据
+
+
+  function loadTeamsMap() {
+    try { return JSON.parse(localStorage.getItem('sj_signup_teams') || '{}'); } catch (e) { return {}; }
+  }
+  function getTermTeams(key) { return key ? (loadTeamsMap()[key] || null) : null; }
+  function saveTermTeams(key, rows, src) {
+    if (!key) return;
+    var m = loadTeamsMap();
+    m[key] = { rows: rows, src: src };
+    try { localStorage.setItem('sj_signup_teams', JSON.stringify(m)); } catch (e) {}
+  }
+  function currentTeams() {
+    var v = termVal();
+    var rec = getTermTeams(termKey(v.year, v.term));
+    return rec ? rec.rows : [];
   }
 
-  function renderTeams() {
+  /* 从金山读某一期的预算表（表名约定：2026秋季学期中预算） */
+  function readKingsoftTeams(year, term) {
+    var sheet = year + term + '预算';
+    return fetch(SYNC_HOOK, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target: 'budget', Context: { argv: { action: 'readBudget', sheet: sheet } } })
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      if (d.error) throw new Error(d.error);
+      var rows = (d.data && d.data.result && d.data.result.rows) || [];
+      return {
+        sheet: sheet,
+        rows: rows.filter(function (r) { return String(r.B || '').trim(); }).map(function (r) {
+          return { B: r.B || '', C: r.C || '', D: r.D || '就协', E: r.E || '', F: Number(r.F) || 12, H: r.H || '' };
+        })
+      };
+    });
+  }
+
+  /* 期次确定后装载本期支队：本地记忆 → 金山 → 预算编制编辑器（仅当编辑器期次吻合） */
+  function loadTeamsForTerm(key, year, term, force) {
+    var seq = ++teamsSeq;
+    if (!force) {
+      var rec = getTermTeams(key);
+      if (rec) { renderTeams(rec.rows, rec.src); return; }
+    }
+    renderTeams([], '正在从金山读取「' + year + term + '预算」…', true);
+    readKingsoftTeams(year, term).then(function (r) {
+      if (seq !== teamsSeq) return;
+      if (!r.rows.length) throw new Error('empty');
+      saveTermTeams(key, r.rows, '金山「' + r.sheet + '」');
+      renderTeams(r.rows, '金山「' + r.sheet + '」');
+    }).catch(function () {
+      if (seq !== teamsSeq) return;
+      renderTeams([], '金山还没有「' + year + term + '预算」：先到「预算编制」做本期预算并「同步金山」，再点右侧刷新', false);
+    });
+  }
+
+  function renderTeams(rows, src, loading) {
     var tb = $('signup-teams-body');
     if (!tb) return;
-    var rows = teamsFromBudget();
+    var srcEl = $('signup-teams-src');
     tb.innerHTML = '';
-    if (!rows.length) {
-      tb.innerHTML = '<tr><td colspan="5" class="hint">还没有支队：先到「预算编制」录入支队信息</td></tr>';
+    if (!rows || !rows.length) {
+      var v = termVal();
+      var msg = termKey(v.year, v.term)
+        ? (src || '本期还没有支队数据')
+        : '先选期次';
+      tb.innerHTML = '<tr><td colspan="5" class="hint"' + (loading ? '' : ' style="color:#b26a00"') + '>' + msg + '</td></tr>';
+      if (srcEl) srcEl.textContent = loading ? '' : '';
       refreshButtons();
       return;
     }
@@ -47,6 +100,7 @@
         '<td>' + String(t.D || '') + '</td>';
       tb.appendChild(tr);
     });
+    if (srcEl) srcEl.textContent = src ? '（来源：' + src + '）' : '';
     refreshButtons();
   }
 
@@ -147,7 +201,7 @@
     var v = termVal();
     var hasTerm = !!termKey(v.year, v.term);
     if ($('signup-create')) $('signup-create').disabled = !hasTerm;
-    if ($('signup-push')) $('signup-push').disabled = !(hasTerm && current && teamsFromBudget().length);
+    if ($('signup-push')) $('signup-push').disabled = !(hasTerm && current && currentTeams().length);
   }
 
   /* 期次切换：保存旧期次链接 → 恢复新期次链接（或清空） */
@@ -162,7 +216,8 @@
     if ($('doc-term')) $('doc-term').value = v.term;
     updateNamePreview();
 
-    if (!key) { currentUrl = ''; hideQr(); renderLink(); refreshButtons(); return; }
+    if (!key) { currentUrl = ''; hideQr(); renderLink(); refreshButtons(); renderTeams([], '', false); return; }
+    loadTeamsForTerm(key, v.year, v.term, false);
     var rec = getLink(key);
     if (rec && rec.url) {
       currentUrl = rec.url;
@@ -261,8 +316,8 @@
   function createForm() {
     var v = termVal();
     if (!termKey(v.year, v.term)) return;   // 按钮已置灰，双保险
-    var rows = teamsFromBudget();
-    if (!rows.length) { setStatus('signup-create-status', '「预算编制」里还没有支队', true); return; }
+    var rows = currentTeams();
+    if (!rows.length) { setStatus('signup-create-status', '本期还没有支队数据（见③的提示）', true); return; }
 
     var payload = {
       action: 'createForm',
@@ -297,7 +352,7 @@
 
   /* ================= 下载推送 ================= */
   function downloadPush() {
-    var rows = teamsFromBudget();
+    var rows = currentTeams();
     if (!rows.length || !current) return;   // 按钮已置灰，双保险
     if (!window.SJ_PUSH) { setStatus('signup-status', '❌ app.js 未暴露 SJ_PUSH，请刷新页面', true); return; }
 
@@ -320,7 +375,7 @@
     if (!$('view-signup')) return;
 
     fillSignupYears();
-    renderTeams();
+    renderTeams([], '', false);
 
     // 口令记忆
     try { $('signup-fn-key').value = localStorage.getItem('sj_signup_key') || ''; } catch (e) {}
@@ -385,7 +440,15 @@
       if (nav) nav.click();
     });
 
-    window.addEventListener('budget:render', renderTeams);
+    // 「从金山刷新」：强制重读本期的金山预算表
+    var rf = $('signup-teams-refresh');
+    if (rf) rf.addEventListener('click', function () {
+      var v = termVal();
+      var key = termKey(v.year, v.term);
+      if (!key) { renderTeams([], '先选期次', false); return; }
+      loadTeamsForTerm(key, v.year, v.term, true);
+    });
+
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
