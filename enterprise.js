@@ -2,7 +2,7 @@
 (function () {
   if (typeof window === "undefined") return;
 
-  const DATA_VERSION = "20261112";
+  const DATA_VERSION = "20261113";
 
   const state = {
     open: false,
@@ -161,12 +161,26 @@
     const n = normName(p);
     if (!n) return null;
     if (lookup.has(n)) return lookup.get(n);
+    // 正向：输入是全称、库键是其中的别名（如「中国航发沈阳黎明…公司」含「中国航发沈阳黎明」）。
+    // 键至少 3 个字，避免「中国」「上海」这类 2 字键造成错配；取最长匹配。
     let best = null, bestLen = 0;
     lookup.forEach(function (c, k) {
-      if (k.length >= 2 && k.length > bestLen && (n.indexOf(k) >= 0 || k.indexOf(n) >= 0)) {
+      if (k.length >= 3 && k.length > bestLen && n.indexOf(k) >= 0) {
         best = c; bestLen = k.length;
       }
     });
+    if (best) return best;
+    // 反向：输入是库键的缩写（如「浪潮集团」⊆「浪潮集团有限公司」）。
+    // 输入至少 4 个字（「华润」「中国电子」这类 2~4 字集团缩写太歧义，宁可不匹配保留原文），
+    // 且长度差 ≤8（大致一个公司后缀的长度），取最短的键。
+    if (n.length >= 4) {
+      let bestK = Infinity;
+      lookup.forEach(function (c, k) {
+        if (k.indexOf(n) >= 0 && k.length - n.length <= 8 && k.length < bestK) {
+          best = c; bestK = k.length;
+        }
+      });
+    }
     return best;
   }
 

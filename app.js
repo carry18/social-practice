@@ -417,6 +417,17 @@ function wordCompanyName(c, fallback) {
   return n || fallback;
 }
 
+/* 招募推送专用：统一用企业库规范名（全称去"有限公司"类后缀）；库里没有就把原文同样去后缀，保持风格统一。
+   注：库的 short_name 不可靠（如"上海联通"的简称是"上海"），故不直接使用。 */
+function wordCompanyShort(c, fallback) {
+  let n = c ? (c.canonical_name || c.short_name || c.raw || "") : String(fallback || "");
+  n = String(n || "").trim();
+  if (n.indexOf("·") < 0) {
+    n = n.replace(/(股份有限公司|有限责任公司|有限公司|集团有限公司)$/, "");
+  }
+  return n || String(fallback || "").trim();
+}
+
 function companyRemark(t) {
   const api = (typeof window !== "undefined") ? window.EnterpriseData : null;
   const items = splitCompanyNames(t.C).map(function (p, idx) {
@@ -1034,10 +1045,25 @@ if (typeof document !== "undefined") {
       if (parts.length) parts[parts.length - 1] += "等";
     }
     const api = (typeof window !== "undefined") ? window.EnterpriseData : null;
-    return (parts.length ? parts : [""]).map(function (p) {
+    const names = [];
+    const seen = {};
+    (parts.length ? parts : [""]).forEach(function (p) {
+      if (!p) return;
       const c = api ? api.find(p) : null;
-      return c ? wordCompanyName(c, p) : p;
+      const n = wordCompanyShort(c, p);
+      if (!n || seen[n]) return;
+      seen[n] = true;
+      names.push(n);
     });
+    return names;
+  }
+
+  /* 推送企业列：统一前 4 家（简称），超过 4 家接「等」 */
+  function pushCompanyLines(C) {
+    const names = splitPushCompanies(C);
+    if (!names.length) return [""];
+    const line = names.length > 4 ? names.slice(0, 4).join("、") + "等" : names.join("、");
+    return [line, "……"];
   }
 
   function setPushCell(tc, lines, W) {
@@ -1116,8 +1142,7 @@ if (typeof document !== "undefined") {
         setPushCell(tcs[0], [String(i + 1)], W);
         setPushCell(tcs[1], [pushPlace(t.B)], W);
         setPushCell(tcs[2], [pushDate(t.E)], W);
-        const comps = splitPushCompanies(t.C).filter(Boolean);
-        setPushCell(tcs[3], comps.length ? [comps.join("、"), "……"] : [""], W);
+        setPushCell(tcs[3], pushCompanyLines(t.C), W);
         setPushCell(tcs[4], [String(t.D || "就协")], W);
         tbl.appendChild(tr);
       });
