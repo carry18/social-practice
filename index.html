@@ -284,26 +284,8 @@
 
   <div class="card">
     <h2>③ 招募推送 Word</h2>
-    <p class="hint">三种来源任选一种，生成结果保留参考模板的全部格式；企业名优先用规范简称。</p>
-    <div class="push-source">
-      <span class="push-tag">当前预览</span>
-      <button class="btn secondary" id="generate-push" disabled>生成招募推送</button>
-      <span class="hint">先在②完成「生成预览」</span>
-    </div>
-    <div class="push-source">
-      <span class="push-tag">上传 xlsx</span>
-      <input type="file" id="file-push" accept=".xlsx,.xls" style="display:none">
-      <button class="btn secondary" id="upload-push">上传金山预算 xlsx → 生成推送</button>
-      <span class="hint">读取 B/C/D/E/F 列</span>
-    </div>
-    <div class="push-source">
-      <span class="push-tag">金山读取</span>
-      <select id="push-sheet" style="width:260px;padding:4px 6px;font-size:13px"></select>
-      <button class="btn secondary" id="push-refresh" type="button">🔄 刷新</button>
-      <label class="hint"><input type="checkbox" id="push-hide-summary" checked> 隐藏汇总表</label>
-      <button class="btn secondary" id="load-push" type="button">读取并生成</button>
-    </div>
-    <div class="hint" id="push-info" style="margin-top:8px"></div>
+    <p class="hint">推送生成（含金数据报名二维码）已合并到「📮 报名推送」模块：支队数据直接取上面①录入的内容。</p>
+    <button class="btn secondary" id="goto-signup" type="button">📮 前往报名推送</button>
   </div>
 
   <div class="card">
@@ -468,9 +450,9 @@
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 <script src="overview.js?v=20261120"></script>
 <script src="https://cdn.jsdelivr.net/npm/pizzip@3.1.7/dist/pizzip.min.js"></script>
-<script src="app.js?v=20261130"></script>
+<script src="app.js?v=20261201"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
-<script src="signup.js?v=202611306"></script>
+<script src="signup.js?v=20261201"></script>
 <script src="enterprise.js?v=20261112"></script>
 <script src="payout.js?v=20261118"></script>
 <script src="note.js?v=20261105m"></script>

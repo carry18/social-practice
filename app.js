@@ -954,29 +954,6 @@ if (typeof document !== "undefined") {
     }
   }
 
-  async function refreshPushList() {
-    const sel = $("push-sheet"), info = $("push-info");
-    if (!sel) return;
-    sel.innerHTML = "";
-    if (info) info.textContent = "读取金山工作表…";
-    try {
-      const names = await callBudget({ action: "list" });
-      const hideSummary = $("push-hide-summary") ? $("push-hide-summary").checked : true;
-      const usable = (names || []).filter(n => !(hideSummary && (/汇总/.test(n) || /决算表v1/i.test(n))));
-      usable.forEach(n => {
-        const op = document.createElement("option");
-        op.value = n; op.textContent = n; sel.appendChild(op);
-      });
-      const hits = usable.filter(n => /预算/.test(n));
-      if (hits.length) sel.value = hits[hits.length - 1];
-      if (info) info.textContent = usable.length
-        ? `共 ${usable.length} 个工作表` + (hideSummary ? "（已隐藏汇总表）" : "")
-        : "没有可读取的预算工作表";
-    } catch (e) {
-      if (info) info.textContent = "读取失败：" + e.message;
-    }
-  }
-
   async function loadBudgetFromSheet() {
     const sel = $("budget-load-sheet"), info = $("budget-load-info");
     const name = sel && sel.value;
@@ -1131,89 +1108,6 @@ if (typeof document !== "undefined") {
       return generatePush(o.list, o);
     }
   };
-
-  function termFromName(name) {
-    const s = String(name || "");
-    if (/春季学期中/.test(s)) return "春季学期中";
-    if (/秋季学期中/.test(s)) return "秋季学期中";
-    if (/寒假/.test(s)) return "寒假";
-    if (/暑期|暑假/.test(s)) return "暑期";
-    return "";
-  }
-
-  async function handlePushFile(file) {
-    const info = $("push-info");
-    if (info) info.textContent = "读取预算 xlsx…";
-    try {
-      const buf = await file.arrayBuffer();
-      const wb = XLSX.read(buf);
-      const name = wb.SheetNames.includes("各支队预算按实际人数校准")
-        ? "各支队预算按实际人数校准" : wb.SheetNames[0];
-      const list = teamsFromSheet(wb.Sheets[name], FARES);
-      if (!list.length) throw new Error("没有找到 B 列非空的支队行");
-      const term = termFromName(file.name) || (($("doc-term") || {}).value || "");
-      if (!term) throw new Error("文件名里没有期次，请先手动选择期次再上传");
-      const ym = String(file.name || "").match(/(20\d{2})/);
-      if (ym) {
-        const sel = $("doc-year");
-        if (sel && Array.from(sel.options).some(o => o.value === ym[1])) sel.value = ym[1];
-      }
-      $("doc-term").value = term;
-      applyTerm();
-
-      const raw = list.map(function (t) {
-        return { B: t.B || "", C: t.C || "", D: t.D || "就协", E: t.E || "",
-          F: t.F != null ? t.F : (t.people != null ? t.people : 12), H: t.H != null ? t.H : "" };
-      });
-      teams = raw;
-      renderEditor();
-      saveLocal();
-      invalidate();
-      if (info) info.textContent = `已读取 ${list.length} 支支队，正在生成推送…`;
-      await generatePush(list);
-      if (info) info.textContent = `✅ 已生成 ${list.length} 支支队的招募推送`;
-    } catch (e) {
-      if (info) info.textContent = "生成失败：" + (e && e.message ? e.message : e);
-      alert("从预算 xlsx 生成推送失败：" + (e && e.message ? e.message : e));
-    }
-  }
-
-  async function loadPushFromSheet() {
-    const sel = $("push-sheet"), info = $("push-info");
-    if (info) info.textContent = "读取金山预算工作表…";
-    try {
-      if (!sel || !sel.options.length) await refreshPushList();
-      const name = sel && sel.value;
-      if (!name) throw new Error("没有可读取的预算工作表，请先刷新列表");
-      if (/汇总/.test(name)) throw new Error("汇总表不能生成推送，请选择某一期预算表");
-      const res = await callBudget({ action: "readBudget", sheet: name });
-      const rows = (res && res.rows) || [];
-      if (!rows.length) throw new Error("这个工作表里没有读到支队数据");
-      const term = termFromName(name) || (($("doc-term") || {}).value || "");
-      if (!term) throw new Error("无法从工作表名识别期次，请先手动选择期次");
-      const ym = name.match(/(20\d{2})/);
-      if (ym) {
-        const ys = $("doc-year");
-        if (ys && Array.from(ys.options).some(o => o.value === ym[1])) ys.value = ym[1];
-      }
-      $("doc-term").value = term;
-      applyTerm();
-      const list = rows.map(function (r) {
-        return { B: r.B || "", C: r.C || "", D: r.D || "就协", E: r.E || "",
-          F: Number(r.F) || 12, H: r.H || "" };
-      });
-      teams = list;
-      renderEditor();
-      saveLocal();
-      invalidate();
-      if (info) info.textContent = `已读取「${name}」${list.length} 支支队，正在生成推送…`;
-      await generatePush(list);
-      if (info) info.textContent = `✅ 已从「${name}」生成 ${list.length} 支支队的招募推送`;
-    } catch (e) {
-      if (info) info.textContent = "读取/生成失败：" + (e && e.message ? e.message : e);
-      alert("从金山读取预算生成推送失败：" + (e && e.message ? e.message : e));
-    }
-  }
 
   async function generate(fmt) {
     const computed = lastComputed;
@@ -1454,7 +1348,6 @@ if (typeof document !== "undefined") {
     $("preview-btn").addEventListener("click", computeAll);
     $("generate").addEventListener("click", () => generate("xlsx"));
     $("generate-docx").addEventListener("click", () => generate("docx"));
-    if ($("generate-push")) $("generate-push").addEventListener("click", () => generatePush());
     if ($("budget-sync")) $("budget-sync").addEventListener("click", syncBudget);
     if ($("budget-load-refresh")) $("budget-load-refresh").addEventListener("click", refreshBudgetList);
     if ($("budget-hide-summary")) $("budget-hide-summary").addEventListener("change", refreshBudgetList);
@@ -1469,11 +1362,6 @@ if (typeof document !== "undefined") {
     $("file").addEventListener("change", e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
     $("upload-docx").addEventListener("click", () => $("file-docx").click());
     $("file-docx").addEventListener("change", e => { if (e.target.files[0]) handleDocxFile(e.target.files[0]); });
-    if ($("upload-push")) $("upload-push").addEventListener("click", () => $("file-push").click());
-    if ($("file-push")) $("file-push").addEventListener("change", e => { if (e.target.files[0]) handlePushFile(e.target.files[0]); });
-    if ($("load-push")) $("load-push").addEventListener("click", loadPushFromSheet);
-    if ($("push-refresh")) $("push-refresh").addEventListener("click", refreshPushList);
-    if ($("push-hide-summary")) $("push-hide-summary").addEventListener("change", refreshPushList);
 
     try {
       const res = await fetch("fares.json");

@@ -340,6 +340,13 @@
       setStatus('signup-create-status', '✅ 已使用粘贴的链接');
     });
 
+    // 预算编制页③的「前往报名推送」跳转按钮
+    var go = $('goto-signup');
+    if (go) go.addEventListener('click', function () {
+      var nav = document.querySelector('aside.side button[data-view="signup"]');
+      if (nav) nav.click();
+    });
+
     window.addEventListener('budget:render', renderTeams);
   }
 
