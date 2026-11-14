@@ -892,7 +892,9 @@ if (typeof document !== "undefined") {
           cells: g.cells, styles: g.styles, ncols: g.ncols,
           total: totalAB, teams: computed.length
         });
-        info.textContent = `✅ 已原样写入金山工作表「${r && r.sheet ? r.sheet : sheetName}」（${r.rows} 行 × ${r.cols} 列，含列宽/行高/合并）`;
+        info.textContent = `✅ 已原样写入金山工作表「${r && r.sheet ? r.sheet : sheetName}」（${r.rows} 行 × ${r.cols} 列，含列宽/行高/合并` +
+          (typeof (r && r.formulas) === "number" ? `，公式 ${r.formulas - (r.formulaFail || 0)}/${r.formulas} 格` : "") + "）" +
+          ((r && r.formulaFail) ? ` ⚠ ${r.formulaFail} 格公式恢复失败（显示为静态值），金山脚本可能不是最新版` : "");
         resetTerm();
         info.textContent += "；期次已清空，请重新选择";
         if (window.SJ_OVERVIEW) window.SJ_OVERVIEW.load();
