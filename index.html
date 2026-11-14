@@ -418,14 +418,17 @@
         </label>
         <span id="signup-name-preview" class="hint" style="margin-left:10px"></span>
       </p>
-      <p class="hint" style="margin:10px 0">
-        <label>云函数地址
-          <input id="signup-fn-url" placeholder="https://xxxx.ap-shanghai.tencentscf.com/" style="width:320px;padding:4px 6px;font-size:13px">
-        </label>
-        <label style="margin-left:10px">口令
-          <input id="signup-fn-key" type="password" placeholder="函数未设 SIGNUP_KEY 可留空" style="width:150px;padding:4px 6px;font-size:13px">
-        </label>
-      </p>
+      <details style="margin:8px 0">
+        <summary class="hint" style="cursor:pointer;color:#8a8a8a">高级设置（云函数地址 / 口令，一般不用改）</summary>
+        <p class="hint" style="margin:8px 0">
+          <label>云函数地址
+            <input id="signup-fn-url" placeholder="https://xxxx.ap-shanghai.tencentscf.com/" style="width:320px;padding:4px 6px;font-size:13px">
+          </label>
+          <label style="margin-left:10px">口令
+            <input id="signup-fn-key" type="password" placeholder="函数未设 SIGNUP_KEY 可留空" style="width:150px;padding:4px 6px;font-size:13px">
+          </label>
+        </p>
+      </details>
       <button class="btn" id="signup-create">🚀 创建报名表</button>
       <div id="signup-create-status" style="font-size:13px;margin-top:10px"></div>
       <details style="margin-top:14px">
@@ -470,7 +473,7 @@
 <script src="https://cdn.jsdelivr.net/npm/pizzip@3.1.7/dist/pizzip.min.js"></script>
 <script src="app.js?v=20261130"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
-<script src="signup.js?v=202611304"></script>
+<script src="signup.js?v=202611305"></script>
 <script src="enterprise.js?v=20261112"></script>
 <script src="payout.js?v=20261118"></script>
 <script src="note.js?v=20261105m"></script>
