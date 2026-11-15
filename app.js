@@ -1098,7 +1098,7 @@ if (typeof document !== "undefined") {
     const PizZipCtor = window.PizZip;
     if (!PizZipCtor) { alert("推送模板库未加载，请刷新页面后重试"); return; }
     try {
-      const res = await fetch("templates/recruitment_template.docx", { cache: "no-cache" });
+      const res = await fetch("templates/recruitment_template.docx?v=20261116", { cache: "no-cache" });
       if (!res.ok) throw new Error("模板读取失败：HTTP " + res.status);
       const zip = new PizZipCtor(await res.arrayBuffer());
       const docFile = zip.file("word/document.xml");
