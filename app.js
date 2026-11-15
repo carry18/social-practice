@@ -417,20 +417,6 @@ function wordCompanyName(c, fallback) {
   return n || fallback;
 }
 
-/* 招募推送专用：优先用企业台账里人工确认过的「简称」（证券简称 > 央企/单位自称 > 行业惯称），
-   没确认过的用规范名去"有限公司"类后缀。库的 short_name 缺失时回退到规范名。 */
-function wordCompanyShort(c, fallback) {
-  let n = "";
-  if (c) {
-    const canon = String(c.canonical_name || "").trim();
-    const short = String(c.short_name || "").trim();
-    n = (short && short !== canon) ? short : (canon || String(c.raw || ""));
-  }
-  if (!n) n = String(fallback || "");
-  n = n.replace(/(股份有限公司|有限责任公司|有限公司|集团有限公司)$/, "").trim();
-  return n || String(fallback || "").trim();
-}
-
 function companyRemark(t) {
   const api = (typeof window !== "undefined") ? window.EnterpriseData : null;
   const items = splitCompanyNames(t.C).map(function (p, idx) {
@@ -1047,16 +1033,12 @@ if (typeof document !== "undefined") {
       parts.pop();
       if (parts.length) parts[parts.length - 1] += "等";
     }
-    const api = (typeof window !== "undefined") ? window.EnterpriseData : null;
     const names = [];
     const seen = {};
     (parts.length ? parts : [""]).forEach(function (p) {
-      if (!p) return;
-      const c = api ? api.find(p) : null;
-      const n = wordCompanyShort(c, p);
-      if (!n || seen[n]) return;
-      seen[n] = true;
-      names.push(n);
+      if (!p || seen[p]) return;
+      seen[p] = true;
+      names.push(p);
     });
     return names;
   }
