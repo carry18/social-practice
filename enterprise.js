@@ -2,7 +2,7 @@
 (function () {
   if (typeof window === "undefined") return;
 
-  const DATA_VERSION = "20261113";
+  const DATA_VERSION = "20261114";
 
   const state = {
     open: false,

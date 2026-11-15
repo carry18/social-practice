@@ -417,14 +417,17 @@ function wordCompanyName(c, fallback) {
   return n || fallback;
 }
 
-/* 招募推送专用：统一用企业库规范名（全称去"有限公司"类后缀）；库里没有就把原文同样去后缀，保持风格统一。
-   注：库的 short_name 不可靠（如"上海联通"的简称是"上海"），故不直接使用。 */
+/* 招募推送专用：优先用企业台账里人工确认过的「简称」（证券简称 > 央企/单位自称 > 行业惯称），
+   没确认过的用规范名去"有限公司"类后缀。库的 short_name 缺失时回退到规范名。 */
 function wordCompanyShort(c, fallback) {
-  let n = c ? (c.canonical_name || c.short_name || c.raw || "") : String(fallback || "");
-  n = String(n || "").trim();
-  if (n.indexOf("·") < 0) {
-    n = n.replace(/(股份有限公司|有限责任公司|有限公司|集团有限公司)$/, "");
+  let n = "";
+  if (c) {
+    const canon = String(c.canonical_name || "").trim();
+    const short = String(c.short_name || "").trim();
+    n = (short && short !== canon) ? short : (canon || String(c.raw || ""));
   }
+  if (!n) n = String(fallback || "");
+  n = n.replace(/(股份有限公司|有限责任公司|有限公司|集团有限公司)$/, "").trim();
   return n || String(fallback || "").trim();
 }
 
