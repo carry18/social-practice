@@ -1098,7 +1098,7 @@ if (typeof document !== "undefined") {
     const PizZipCtor = window.PizZip;
     if (!PizZipCtor) { alert("推送模板库未加载，请刷新页面后重试"); return; }
     try {
-      const res = await fetch("templates/recruitment_template.docx?v=20261118", { cache: "no-cache" });
+      const res = await fetch("templates/recruitment_template.docx?v=20261119", { cache: "no-cache" });
       if (!res.ok) throw new Error("模板读取失败：HTTP " + res.status);
       const zip = new PizZipCtor(await res.arrayBuffer());
       const docFile = zip.file("word/document.xml");
@@ -1107,66 +1107,56 @@ if (typeof document !== "undefined") {
       const xml = new DOMParser().parseFromString(docFile.asText(), "application/xml");
       if (xml.getElementsByTagName("parsererror").length) throw new Error("模板 XML 解析失败");
 
-      Array.from(xml.getElementsByTagNameNS(W, "t")).forEach(function (t) {
-        if (t.textContent.indexOf("{{term}}") >= 0) {
-          t.textContent = t.textContent.replace(/\{\{term\}\}/g, term);
-        }
-      });
-
-      // 「优先有赴目的城市就业意向的2027届毕业生」：届别 = 实践年份 + 1（2026 年 → 2027 届）
-      // 模板里年份被拆成两个 run（"202" + "7"），这里合并成一个再写
+      // 「期次 / 天数 / 届别」三处动态内容：按段落拼文本做替换，跨 Word 文本段也稳（模板随便分段）
       const termYear = Number((($("doc-year") || {}).value) || 0) || new Date().getFullYear();
       const gradYear = String(termYear + 1);
-      const yrRuns = Array.from(xml.getElementsByTagNameNS(W, "t"));
-      for (let i = 1; i < yrRuns.length; i++) {
-        const cur = yrRuns[i].textContent;
-        const prevTxt = yrRuns[i - 1].textContent;
-        const nextTxt = yrRuns[i + 1] ? yrRuns[i + 1].textContent : "";
-        if (/^\d$/.test(cur.trim()) && /^届/.test(nextTxt.trim()) && /\d{3}$/.test(prevTxt)) {
-          yrRuns[i - 1].textContent = prevTxt.replace(/\d{3}$/, "") + gradYear;
-          yrRuns[i].textContent = "";
-        } else if (/\d{4}届/.test(cur)) {
-          yrRuns[i].textContent = cur.replace(/\d{4}届/, gradYear + "届");
-        }
-      }
-
-      // 「前往各地开展为期5～7天左右」：按金山「拟参访日期」算出的天数改写
       const dayList = computed.map(function (t) {
-        const d = Number(t.days) || parseDays(t.E) || 0;
-        return d;
+        return Number(t.days) || parseDays(t.E) || 0;
       }).filter(function (n) { return n > 0; });
-      if (dayList.length) {
-        const lo = Math.min.apply(null, dayList), hi = Math.max.apply(null, dayList);
-        const runs = Array.from(xml.getElementsByTagNameNS(W, "t"));
-        for (let i = 0; i < runs.length; i++) {
-          if (runs[i].textContent.indexOf("为期") < 0) continue;
-          // 紧随其后：数字段 → ～数字 段（可能跨多个 run，如 "～7"）
-          for (let j = i + 1; j < Math.min(i + 4, runs.length); j++) {
-            const txt = runs[j].textContent;
-            if (/^\d+$/.test(txt.trim())) {
-              runs[j].textContent = String(lo);
-              const nxt = runs[j + 1];
-              if (nxt && /^[～~\-–—]?\d+$/.test(nxt.textContent.trim())) {
-                if (hi > lo) {
-                  nxt.textContent = "～" + hi;
-                } else {
-                  // 只有单个数字 = 精确天数，去掉「左右」
-                  nxt.textContent = "";
-                  for (let k = j + 2; k < Math.min(j + 5, runs.length); k++) {
-                    if (/左右/.test(runs[k].textContent)) {
-                      runs[k].textContent = runs[k].textContent.replace(/天左右/, "天").replace(/左右/, "");
-                      break;
-                    }
-                  }
-                }
-              }
-              break;
+      const dayLo = dayList.length ? Math.min.apply(null, dayList) : 0;
+      const dayHi = dayList.length ? Math.max.apply(null, dayList) : 0;
+
+      /* 在一个段落的所有 w:t 上做"拼起来匹配 → 回填"的替换，保留首个命中段的字体/颜色 */
+      function replaceParagraphText(ps, re, build) {
+        let hit = 0;
+        ps.forEach(function (p) {
+          const ts = Array.from(p.getElementsByTagNameNS(W, "t"));
+          if (!ts.length) return;
+          for (let guard = 0; guard < 20; guard++) {
+            const texts = ts.map(function (t) { return t.textContent; });
+            const m = texts.join("").match(re);
+            if (!m) return;
+            const start = m.index, end = start + m[0].length;
+            const rep = build(m);
+            let off = 0, placed = false;
+            for (let k = 0; k < ts.length; k++) {
+              const rs = off, re2 = off + texts[k].length;
+              off = re2;
+              if (re2 <= start) continue;
+              if (rs >= end) break;
+              const head = texts[k].slice(0, Math.max(0, start - rs));
+              const tail = texts[k].slice(Math.max(0, end - rs));
+              ts[k].textContent = head + (placed ? "" : rep) + (re2 > end ? tail : "");
+              placed = true;
+              if (re2 > end) break;
             }
+            if (!placed) return;
+            hit++;
           }
-          break;
-        }
+        });
+        return hit;
       }
 
+      const paragraphs = Array.from(xml.getElementsByTagNameNS(W, "p"));
+      replaceParagraphText(paragraphs, /\{\{term\}\}/, function () { return term; });
+      if (dayLo) {
+        replaceParagraphText(paragraphs, /为期\s*\d+\s*(?:[～~\-–—]\s*\d+\s*)?天(?:左右)?/, function () {
+          return "为期" + dayLo + (dayHi > dayLo ? "～" + dayHi : "") + "天" + (dayHi > dayLo ? "左右" : "");
+        });
+      }
+      replaceParagraphText(paragraphs, /\d{4}届/, function () { return gradYear + "届"; });
+
+      
       try { if (window.EnterpriseData) await window.EnterpriseData.ensure(); } catch (e) { /* 用原文 */ }
       const tbl = xml.getElementsByTagNameNS(W, "tbl")[0];
       if (!tbl) throw new Error("模板缺少表格");
