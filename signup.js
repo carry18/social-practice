@@ -466,6 +466,8 @@
         teams: rows.map(function (r, i) {
           return {
             label: (i + 1) + '. ' + String(r.B || '') + (r.E ? ' ' + r.E : '') + (r.D ? ' ' + r.D : ''),
+            B: String(r.B || ''),
+            D: String(r.D || ''),
             people: Number(r.F) || 0
           };
         })
@@ -477,9 +479,15 @@
           setStatus('signup-status', '❌ ' + (res.d.error || '同步失败'), true);
           return;
         }
-        setStatus('signup-status', res.d.changed === false
-          ? '✅ 报名表选项已是最新（' + res.d.total + ' 支）'
-          : '✅ 已同步：新增 ' + res.d.added + ' 项，移除 ' + res.d.removed + ' 项，现存 ' + res.d.total + ' 支');
+        var tail = res.d.orderOk === false ? '；⚠️ 选项顺序与队伍不一致，可在金数据后台拖动调整' : '';
+        if (res.d.changed === false) {
+          setStatus('signup-status', '✅ 报名表选项已是最新（' + res.d.total + ' 支）' + tail, res.d.orderOk === false);
+          return;
+        }
+        var bits = ['新增 ' + (res.d.added || 0)];
+        if (res.d.updated) bits.push('改名 ' + res.d.updated);
+        bits.push('移除 ' + (res.d.removed || 0));
+        setStatus('signup-status', '✅ 已同步：' + bits.join('、') + '，现存 ' + res.d.total + ' 支' + tail, res.d.orderOk === false);
       })
       .catch(function () { setStatus('signup-status', '❌ 网络错误：同步失败', true); })
       .finally(function () { refreshButtons(); });
