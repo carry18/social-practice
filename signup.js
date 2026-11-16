@@ -280,6 +280,7 @@
     var nActive = activeTeams().length;
     if ($('signup-push')) $('signup-push').disabled = !(hasTerm && current && nActive);
     if ($('signup-sync-choices')) $('signup-sync-choices').disabled = !(hasTerm && current && nActive);
+    if ($('signup-repair-order')) $('signup-repair-order').disabled = !(hasTerm && current && nActive);
   }
 
   /* 期次切换：保存旧期次链接 → 恢复新期次链接（或清空） */
@@ -449,7 +450,7 @@
   }
 
   /* ================= 同步选项到报名表 ================= */
-  function syncChoices() {
+  function syncChoices(forceOrder) {
     var v = termVal();
     if (!currentUrl) return;
     var rows = activeTeams();
@@ -463,6 +464,7 @@
       body: JSON.stringify({
         action: 'syncTeams',
         name: formName(v.year, v.term),
+        forceOrder: forceOrder === true,
         teams: rows.map(function (r, i) {
           return {
             label: (i + 1) + '. ' + String(r.B || '') + (r.E ? ' ' + r.E : '') + (r.D ? ' ' + r.D : ''),
@@ -479,9 +481,13 @@
           setStatus('signup-status', '❌ ' + (res.d.error || '同步失败'), true);
           return;
         }
-        var tail = res.d.orderOk === false ? '；⚠️ 选项顺序与队伍不一致，可在金数据后台拖动调整' : '';
+        var tail = res.d.orderOk === false ? '；⚠️ 选项顺序与队伍不一致（有答卷，未自动重建）——可点「🔧 修复选项顺序」' : '';
         if (res.d.changed === false) {
           setStatus('signup-status', '✅ 报名表选项已是最新（' + res.d.total + ' 支）' + tail, res.d.orderOk === false);
+          return;
+        }
+        if (res.d.repaired) {
+          setStatus('signup-status', '✅ ' + (res.d.message || '已修复选项顺序（按 1~' + res.d.total + ' 重建）'), false);
           return;
         }
         var bits = ['新增 ' + (res.d.added || 0)];
@@ -528,7 +534,12 @@
     $('signup-create').addEventListener('click', createForm);
     $('signup-push').addEventListener('click', downloadPush);
     var sc = $('signup-sync-choices');
-    if (sc) sc.addEventListener('click', syncChoices);
+    if (sc) sc.addEventListener('click', function () { syncChoices(false); });
+    var rp = $('signup-repair-order');
+    if (rp) rp.addEventListener('click', function () {
+      if (!confirm('会按当前队伍顺序重建选项（api_code 会变），已有答卷的「想要报名的支队」选择将失效。\n\n确认重建？')) return;
+      syncChoices(true);
+    });
     var tb = $('signup-teams-body');
     if (tb) tb.addEventListener('click', onTeamsClick);
 
