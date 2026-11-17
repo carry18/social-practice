@@ -1,7 +1,7 @@
 {
   "_说明": "每期台账：hook = 该期金山文档里 AirScript 的 webhook 地址；until = 报名截止日（之后定时任务自动跳过）；enabled=false 可手动停用",
   "2026秋季学期中": {
-    "hook": "",
+    "hook": "https://www.kdocs.cn/api/v3/ide/file/caGUxZtjjS2B/script/V2-609mB2JpJOFL8UPf35q4tj/sync_task",
     "until": "2026-12-31",
     "enabled": true
   }
