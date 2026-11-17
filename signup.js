@@ -281,6 +281,7 @@
     if ($('signup-push')) $('signup-push').disabled = !(hasTerm && current && nActive);
     if ($('signup-sync-choices')) $('signup-sync-choices').disabled = !(hasTerm && current && nActive);
     if ($('signup-repair-order')) $('signup-repair-order').disabled = !(hasTerm && current && nActive);
+    if ($('signup-ledger')) $('signup-ledger').disabled = !(hasTerm && current);
   }
 
   /* 期次切换：保存旧期次链接 → 恢复新期次链接（或清空） */
@@ -450,6 +451,33 @@
   }
 
   /* ================= 同步选项到报名表 ================= */
+  /* 建/同步金山实践台账：云函数读预算表 + 拉金数据 → 推 AirScript */
+  function syncLedger() {
+    var v = termVal();
+    var term = String(v.year || '') + String(v.term || '');
+    if (!term) { setStatus('signup-status', '请先选期次', true); return; }
+    var btn = $('signup-ledger');
+    if (btn) btn.disabled = true;
+    setStatus('signup-status', '正在建/同步台账…（读预算表 + 拉报名数据 + 推金山）');
+    fetch(FN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'ledgerSync', term: term })
+    })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+      .then(function (res) {
+        if (!res.ok) { setStatus('signup-status', '❌ ' + (res.d.error || '台账同步失败'), true); return; }
+        var one = (res.d.synced || [])[0] || {};
+        if (one.error) { setStatus('signup-status', '❌ ' + one.error, true); return; }
+        if (one.skipped) { setStatus('signup-status', '⏭ ' + one.skipped, true); return; }
+        setStatus('signup-status',
+          '✅ 台账已同步：' + (one.teams || 0) + ' 支、' + (one.entries || 0) + ' 条答卷；金山返回 ' + (one.hookStatus || '?') +
+          (one.reflow ? '；' + String(one.reflow).slice(0, 60) : ''));
+      })
+      .catch(function () { setStatus('signup-status', '❌ 网络错误：台账同步失败', true); })
+      .finally(function () { refreshButtons(); });
+  }
+
   function syncChoices(forceOrder) {
     var v = termVal();
     if (!currentUrl) return;
@@ -535,6 +563,8 @@
     $('signup-push').addEventListener('click', downloadPush);
     var sc = $('signup-sync-choices');
     if (sc) sc.addEventListener('click', function () { syncChoices(false); });
+    var lg = $('signup-ledger');
+    if (lg) lg.addEventListener('click', syncLedger);
     var rp = $('signup-repair-order');
     if (rp) rp.addEventListener('click', function () {
       if (!confirm('会按当前队伍顺序重建选项（api_code 会变），已有答卷的「想要报名的支队」选择将失效。\n\n确认重建？')) return;
