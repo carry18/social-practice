@@ -346,6 +346,72 @@ var HEAD2KEY = {
   '本科院校': 'bschool', '本科专业': 'bmajor', '简历链接': 'resume', '愿任支队长': 'wantLeader', '家乡': 'hometown'
 };
 
+/* 清空所有数据行（保留表头/样式/下拉） */
+function clearAllData() {
+  var names = ['总表', '淘汰池'];
+  for (var i = 1; i <= Application.Sheets.Count; i++) {
+    var nm = Application.Sheets.Item(i).Name;
+    if (names.indexOf(nm) < 0) names.push(nm);
+  }
+  var skip = ['支队对照', '支队概况总览', '企业联络需求表', '开函统计', '选项', '同步日志'];
+  var cleared = 0;
+  names.forEach(function (nm) {
+    if (skip.indexOf(nm) >= 0) return;
+    var ws = sheet(nm);
+    if (!ws) return;
+    var n = lastRow(ws);
+    if (n >= 2) {
+      try {
+        ws.Range(ws.Cells(2, 1), ws.Cells(n, Math.max(ws.UsedRange.Columns.Count, 20))).ClearContents();
+        cleared++;
+      } catch (e) {}
+    }
+  });
+  return cleared;
+}
+
+/* 表头是否为新版（有 录取状态 列） */
+function headerOk() {
+  var ws = sheet('总表');
+  if (!ws) return false;
+  var m = headerMap(ws);
+  return !!m['录取状态'] && !!m['entry_id'];
+}
+
+/* 清空重建：保留每人的录取状态与分配，重建后恢复 */
+function resetAll() {
+  var ws = sheet('总表');
+  var keep = {};
+  if (ws && headerOk()) {
+    var m = headerMap(ws), cId = m['entry_id'];
+    var st = m['录取状态'], as = m['分配状态'];
+    for (var r = 2; r <= lastRow(ws); r++) {
+      var id = String(fmt1(ws.Cells(r, cId).Value2)).trim();
+      if (!id) continue;
+      keep[id] = {
+        status: String(fmt1(ws.Cells(r, st).Value2)).trim(),
+        assign: String(fmt1(ws.Cells(r, as).Value2)).trim()
+      };
+    }
+  }
+  var cleared = clearAllData();
+  var msg = ensureSheets(CONFIG.teams || []);
+  var sync = syncEntries();
+  var ws2 = sheet('总表');
+  if (ws2 && Object.keys(keep).length) {
+    var m2 = headerMap(ws2), cId2 = m2['entry_id'], st2 = m2['录取状态'], as2 = m2['分配状态'];
+    for (var r2 = 2; r2 <= lastRow(ws2); r2++) {
+      var id2 = String(fmt1(ws2.Cells(r2, cId2).Value2)).trim();
+      var k = keep[id2];
+      if (!k) continue;
+      if (k.status) ws2.Cells(r2, st2).Value2 = k.status;
+      if (k.assign) { ws2.Cells(r2, as2).Value2 = k.assign; colorCell(ws2, r2, as2, null); }
+    }
+  }
+  var rf = reflow(true);
+  return 'reset: 清空 ' + cleared + ' 张表 | ' + msg + ' | ' + sync + ' | ' + rf;
+}
+
 /* ---------------- reflow：淘汰 / 捞起归位 ---------------- */
 
 function reflow(force) {
