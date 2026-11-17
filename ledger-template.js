@@ -349,6 +349,21 @@ var HEAD2KEY = {
   '本科院校': 'bschool', '本科专业': 'bmajor', '简历链接': 'resume', '愿任支队长': 'wantLeader', '家乡': 'hometown'
 };
 
+/* 比较「目标二维数组」与表内现有内容是否一致（字符串化比较，忽略类型差） */
+function sameMatrix(ws, ncol, desired) {
+  var n = lastRow(ws);
+  var cur = n >= 2 ? ws.Range(ws.Cells(2, 1), ws.Cells(n, ncol)).Value2 : [];
+  if ((cur || []).length !== desired.length) return false;
+  for (var i = 0; i < desired.length; i++) {
+    for (var j = 0; j < desired[i].length; j++) {
+      var a = cur[i] ? String(fmt1(cur[i][j])).trim() : '';
+      var b = String(fmt1(desired[i][j])).trim();
+      if (a !== b) return false;
+    }
+  }
+  return true;
+}
+
 /* 清空所有数据行（保留表头/样式/下拉） */
 function clearAllData() {
   var names = ['总表', '淘汰池'];
@@ -513,13 +528,16 @@ function reflow(force) {
     var ts = sheet(nm);
     if (!ts) return;
     var tm = headerMap(ts);
+    var list = byTeam[nm] || [];
+    var desired = list.map(function (o) {
+      var oid = String(fmt1(o.v[m['entry_id'] - 1])).trim();
+      return [statusOf[oid] || ''].concat(pickByHeader(o.v, m, tm, 1));
+    });
+    if (sameMatrix(ts, tm['entry_id'], desired)) { rebuilt++; return; }   // 没变化就不动
     var tn = lastRow(ts);
     if (tn >= 2) ts.Range(ts.Cells(2, 1), ts.Cells(tn, tm['entry_id'])).ClearContents();
-    (byTeam[nm] || []).forEach(function (o, i) {
-      var vals = pickByHeader(o.v, m, tm, 1);          // 跳过「录取状态」
-      ts.Range(ts.Cells(i + 2, 2), ts.Cells(i + 2, 2 + vals.length - 1)).Value2 = [vals];
-      var oid = String(fmt1(o.v[m['entry_id'] - 1])).trim();
-      ts.Cells(i + 2, 1).Value2 = statusOf[oid] || '';  // 恢复「录取/淘汰」标记
+    desired.forEach(function (rowVals, i) {
+      ts.Range(ts.Cells(i + 2, 1), ts.Cells(i + 2, rowVals.length)).Value2 = [rowVals];
     });
     rebuilt++;
   });
@@ -611,7 +629,26 @@ function logRun(text) {
 function main() {
   var out = [];
   try {
-    out.push(resetAll());                    // 每次全量重建，避免历史脏行/重复
+    var stale = false;
+    var wsT = sheet('总表');
+    if (wsT && headerOk()) {                  // 找出「有内容但没有 entry_id」的历史脏行
+      var mT = headerMap(wsT), cT = mT['entry_id'];
+      for (var rT = 2; rT <= lastRow(wsT); rT++) {
+        var idT = String(fmt1(wsT.Cells(rT, cT).Value2)).trim();
+        var anyT = false;
+        for (var cT2 = 2; cT2 <= cT; cT2++) {
+          if (String(fmt1(wsT.Cells(rT, cT2).Value2)).trim() !== '') { anyT = true; break; }
+        }
+        if (!idT && anyT) { stale = true; break; }
+      }
+    }
+    if (!headerOk() || stale) {
+      out.push(resetAll());                   // 结构过期 / 有脏行 → 清空重建
+    } else {
+      if (CONFIG.teams && CONFIG.teams.length) out.push(ensureSheets(CONFIG.teams));
+      out.push(syncEntries());
+      out.push(reflow(true));
+    }
   } catch (e) {
     out.push('失败：' + (e && e.message ? e.message : e));
   }
