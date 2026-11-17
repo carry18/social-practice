@@ -37,9 +37,13 @@ var CONFIG = {
 var argv = (typeof Context !== 'undefined' && Context && Context.argv) || {};
 var action = argv.action || 'ping';
 
-var COLORS = [[80, 129, 194], [31, 187, 106], [228, 180, 13], [233, 85, 45], [142, 100, 214],
-              [0, 166, 166], [221, 69, 149], [240, 146, 0], [108, 142, 191], [124, 179, 66],
-              [176, 133, 91], [61, 71, 87]];
+/* 浅色系：浅底 + 深字，打印/截图都清楚 */
+var COLORS = [[220, 233, 249], [223, 243, 228], [255, 243, 209], [253, 226, 218], [232, 226, 250],
+              [217, 242, 242], [251, 225, 238], [252, 235, 214], [233, 237, 242], [237, 245, 218],
+              [240, 230, 221], [230, 232, 235]];
+var TEXT_DARK = [55, 65, 81];
+var HEAD_FILL = [234, 241, 251];
+var HEAD_TEXT = [30, 58, 95];
 
 var BASE_HEAD = ['序号', '姓名', '少干/定向', '学号', '手机号', '性别', '院系', '专业',
                  '拟毕业时间', '学历', '本科院校', '本科专业', '简历链接', '愿任支队长', '家乡'];
@@ -79,8 +83,8 @@ function ensureSheet(name) {
 function writeHeader(ws, head) {
   ws.Range(ws.Cells(1, 1), ws.Cells(1, head.length)).Value2 = [head];
   ws.Rows(1).Font.Bold = true;
-  ws.Rows(1).Interior.Color = RGB(74, 111, 165);
-  ws.Rows(1).Font.Color = RGB(255, 255, 255);
+  ws.Rows(1).Interior.Color = RGB(HEAD_FILL[0], HEAD_FILL[1], HEAD_FILL[2]);
+  ws.Rows(1).Font.Color = RGB(HEAD_TEXT[0], HEAD_TEXT[1], HEAD_TEXT[2]);
 }
 
 function colLetter(n) {
@@ -169,7 +173,7 @@ function colorCell(ws, r, c, num) {
   var p = COLORS[k];
   if (!p) return;
   ws.Cells(r, c).Interior.Color = RGB(p[0], p[1], p[2]);
-  ws.Cells(r, c).Font.Color = RGB(255, 255, 255);
+  ws.Cells(r, c).Font.Color = RGB(TEXT_DARK[0], TEXT_DARK[1], TEXT_DARK[2]);
 }
 
 /* ---------------- ensure：建表 ---------------- */
@@ -282,8 +286,8 @@ function ensureSheets(teams) {
     }
     addRangeList(ts, 'A2:A1000', '选项!$A$2:$A$3');                // 录取状态下拉
     try { ts.Range('A2:A1000').FormatConditions.Delete(); } catch (e2) {}
-    addRowColor(ts, 'A2:A1000', '=$A2="淘汰"', [217, 217, 217]);
-    addRowColor(ts, 'A2:A1000', '=$A2="录取"', [199, 239, 206]);   // 只给状态格上色
+    addRowColor(ts, 'A2:A1000', '=$A2="淘汰"', [237, 237, 237]);
+    addRowColor(ts, 'A2:A1000', '=$A2="录取"', [214, 242, 222]);   // 只给状态格上色
   });
 
   return 'sheets ready: ' + (6 + teams.length) + ' 张';
