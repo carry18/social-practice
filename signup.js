@@ -281,7 +281,7 @@
     if ($('signup-push')) $('signup-push').disabled = !(hasTerm && current && nActive);
     if ($('signup-sync-choices')) $('signup-sync-choices').disabled = !(hasTerm && current && nActive);
     if ($('signup-repair-order')) $('signup-repair-order').disabled = !(hasTerm && current && nActive);
-    if ($('signup-ledger')) $('signup-ledger').disabled = !(hasTerm && current);
+    if ($('signup-ledger')) $('signup-ledger').disabled = !hasTerm;   // 台账只依赖期次，不依赖报名链接
   }
 
   /* 期次切换：保存旧期次链接 → 恢复新期次链接（或清空） */
