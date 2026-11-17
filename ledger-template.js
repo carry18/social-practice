@@ -203,9 +203,10 @@ function ensureSheets(teams) {
   head.push('entry_id');
   writeHeader(ws, head);
   var widths = [10, 6, 10, 10, 14, 14, 6, 14, 18, 12, 8, 14, 18, 30, 10, 12];
-  for (var x = 0; x < n; x++) widths.push(6);
+  for (var x = 0; x < n; x++) widths.push(26);
   widths.push(12);
   setWidths(ws, widths);
+  try { ws.Columns(head.length).Hidden = true; } catch (e) {}   // 隐藏 entry_id
 
   // 6. 淘汰池
   ws = ensureSheet('淘汰池');
@@ -431,13 +432,15 @@ function ledgerRowOf(e) {
     if (Object.prototype.toString.call(v) === '[object Array]') return v.join('、');
     return v == null ? '' : v;
   };
-  var vols = (e.field_16 || []).slice().sort(function (a, b) { return (a.rank || 99) - (b.rank || 99); })
-    .map(function (it) {
-      var m = String(it.choice || '').match(/^\s*(\d+)\./);
-      return m ? m[1] : '';
-    });
+  var sorted = (e.field_16 || []).slice().sort(function (a, b) { return (a.rank || 99) - (b.rank || 99); });
+  var vols = sorted.map(function (it) { return String(it.choice || '').trim(); });   // 志愿列写文本
+  var firstNum = '';
+  if (sorted.length) {
+    var mm = String(sorted[0].choice || '').match(/^\s*(\d+)\./);
+    if (mm) firstNum = mm[1];
+  }
   return {
-    id: e.token, sn: e.serial_number, assign: vols[0] || '', vols: vols,
+    id: e.token, sn: e.serial_number, assign: firstNum, vols: vols,
     name: g('field_1'), minority: g('field_2'), sid: g('field_3'), phone: g('field_4'),
     gender: g('field_5'), dept: g('field_18'), major: g('field_7'), grad: g('field_8'),
     degree: g('field_9'), bschool: g('field_10'), bmajor: g('field_11'), resume: g('field_12'),
