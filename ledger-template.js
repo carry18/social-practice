@@ -83,6 +83,12 @@ function writeHeader(ws, head) {
   ws.Rows(1).Font.Color = RGB(255, 255, 255);
 }
 
+function colLetter(n) {
+  var s2 = '';
+  while (n > 0) { var m = (n - 1) % 26; s2 = String.fromCharCode(65 + m) + s2; n = Math.floor((n - 1) / 26); }
+  return s2;
+}
+
 function setWidths(ws, widths) {
   for (var i = 0; i < widths.length; i++) {
     try { ws.Columns(i + 1).ColumnWidth = widths[i]; } catch (e) {}
@@ -132,6 +138,16 @@ function addList(ws, addr, items) {
     try { rng.Validation.Delete(); } catch (e0) {}
     var f = '"' + items.join(',') + '"';
     rng.Validation.Add(3, 1, 1, f);
+    return true;
+  } catch (e) { return false; }
+}
+
+/* 条件格式：按公式整行着色（失败静默跳过） */
+function addRowColor(ws, addr, formula, rgbArr) {
+  try {
+    var fc = ws.Range(addr).FormatConditions;
+    var c = fc.Add(2, 1, formula);        // 2 = xlExpression
+    c.Interior.Color = RGB(rgbArr[0], rgbArr[1], rgbArr[2]);
     return true;
   } catch (e) { return false; }
 }
@@ -222,6 +238,12 @@ function ensureSheets(teams) {
   for (var q = 1; q <= n; q++) opts.push(q);
   opts.push('淘汰');
   addList(ws, 'A2:A1000', opts);                                 // 分配状态下拉
+  var lastColLetter = colLetter(head.length);
+  try { ws.Range('A2:' + lastColLetter + '1000').FormatConditions.Delete(); } catch (e1) {}
+  for (var ci = 1; ci <= n && ci <= COLORS.length; ci++) {
+    var cp = COLORS[ci - 1];
+    addRowColor(ws, 'A2:' + lastColLetter + '1000', '=$A2=' + ci, cp);
+  }
 
   // 6. 淘汰池
   ws = ensureSheet('淘汰池');
@@ -240,6 +262,9 @@ function ensureSheets(teams) {
       setWidths(ts, [10, 6, 10, 10, 14, 14, 6, 14, 18, 12, 8, 14, 18, 30, 10, 12, 12]);
     }
     addList(ts, 'A2:A1000', ['录取', '淘汰']);                     // 录取状态下拉（每次都补）
+    try { ts.Range('A2:Q1000').FormatConditions.Delete(); } catch (e2) {}
+    addRowColor(ts, 'A2:Q1000', '=$A2="淘汰"', [217, 217, 217]);
+    addRowColor(ts, 'A2:Q1000', '=$A2="录取"', [199, 239, 206]);
   });
 
   return 'sheets ready: ' + (5 + teams.length) + ' 张';
