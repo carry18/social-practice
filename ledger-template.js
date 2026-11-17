@@ -163,9 +163,11 @@ function addRangeList(ws, addr, ref) {
 }
 
 function colorCell(ws, r, c, num) {
-  if (!num) return;
-  var k = (Number(num) - 1) % COLORS.length;
+  var kk = Number(num);
+  if (!isFinite(kk) || kk <= 0) return;     // 队名文本不手动着色（交给条件格式）
+  var k = (kk - 1) % COLORS.length;
   var p = COLORS[k];
+  if (!p) return;
   ws.Cells(r, c).Interior.Color = RGB(p[0], p[1], p[2]);
   ws.Cells(r, c).Font.Color = RGB(255, 255, 255);
 }
