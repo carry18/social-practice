@@ -175,6 +175,18 @@ function colorCell(ws, r, c, num) {
 function ensureSheets(teams) {
   var n = teams.length;
 
+  // 0. 选项（隐藏）：下拉数据源，避免内联字符串的引号/空格问题
+  var opt = ensureSheet('选项');
+  opt.Range('A1:C100').ClearContents();
+  opt.Range('A1:C1').Value2 = [['录取状态', '支队名', '分配状态']];
+  opt.Range('A2:A3').Value2 = [['录取'], ['淘汰']];
+  for (var oi = 1; oi <= n; oi++) {
+    opt.Cells(1 + oi, 2).Value2 = teams[oi - 1].label;
+    opt.Cells(1 + oi, 3).Value2 = Number(teams[oi - 1].num);
+  }
+  opt.Cells(n + 2, 3).Value2 = '淘汰';
+  try { opt.Columns('A:C').Hidden = true; } catch (e0) {}
+
   // 1. 支队对照
   var ws = ensureSheet('支队对照');
   ws.Range('A1:H1').ClearContents();
@@ -254,22 +266,17 @@ function ensureSheets(teams) {
         '=IF($A' + rr2 + '="","",IFERROR(INDEX(支队对照!$B:$B,MATCH($A' + rr2 + ',支队对照!$A:$A,0)),$A' + rr2 + '))';
     } catch (e3) {}
   }
-  var opts = [];
-  for (var q = 1; q <= n; q++) opts.push(q);
-  opts.push('淘汰');
-  addList(ws, 'A2:A1000', opts);                                 // 分配状态下拉
-  var lastColLetter = colLetter(head.length);
-  try { ws.Range('A2:' + lastColLetter + '1000').FormatConditions.Delete(); } catch (e1) {}
+  addRangeList(ws, 'A2:A1000', '选项!$C$2:$C$' + (n + 2));        // 分配状态下拉
+  try { ws.Range('A2:A1000').FormatConditions.Delete(); } catch (e1) {}
   for (var ci = 1; ci <= n && ci <= COLORS.length; ci++) {
-    var cp = COLORS[ci - 1];
-    addRowColor(ws, 'A2:' + lastColLetter + '1000', '=$A2=' + ci, cp);
+    addRowColor(ws, 'A2:A1000', '=$A2=' + ci, COLORS[ci - 1]);    // 只给分配状态格上色
   }
 
   // 6. 淘汰池
   ws = ensureSheet('淘汰池');
   writeHeader(ws, ['分配状态', '捞入支队'].concat(BASE_HEAD).concat(['entry_id']));
   setWidths(ws, [10, 34, 6, 10, 10, 14, 14, 6, 14, 18, 12, 8, 14, 18, 30, 10, 12, 12]);
-  addRangeList(ws, 'B2:B1000', '支队对照!$B$2:$B$' + (n + 1));     // 捞入支队：队名下拉
+  addRangeList(ws, 'B2:B1000', '选项!$B$2:$B$' + (n + 1));        // 捞入支队：队名下拉
 
   // 7. 各支队分表
   teams.forEach(function (t) {
@@ -279,10 +286,10 @@ function ensureSheets(teams) {
       writeHeader(ts, ['录取状态'].concat(BASE_HEAD).concat(['entry_id']));
       setWidths(ts, [10, 6, 10, 10, 14, 14, 6, 14, 18, 12, 8, 14, 18, 30, 10, 12, 12]);
     }
-    addList(ts, 'A2:A1000', ['录取', '淘汰']);                     // 录取状态下拉（每次都补）
-    try { ts.Range('A2:Q1000').FormatConditions.Delete(); } catch (e2) {}
-    addRowColor(ts, 'A2:Q1000', '=$A2="淘汰"', [217, 217, 217]);
-    addRowColor(ts, 'A2:Q1000', '=$A2="录取"', [199, 239, 206]);
+    addRangeList(ts, 'A2:A1000', '选项!$A$2:$A$3');                // 录取状态下拉
+    try { ts.Range('A2:A1000').FormatConditions.Delete(); } catch (e2) {}
+    addRowColor(ts, 'A2:A1000', '=$A2="淘汰"', [217, 217, 217]);
+    addRowColor(ts, 'A2:A1000', '=$A2="录取"', [199, 239, 206]);   // 只给状态格上色
   });
 
   return 'sheets ready: ' + (5 + teams.length) + ' 张';
