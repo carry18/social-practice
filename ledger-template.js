@@ -125,6 +125,17 @@ function pickByHeader(srcVals, srcMap, dstMap, skipCount) {
   return out;
 }
 
+/* 给区域加下拉列表（JSA：Validation.Add(3=列表, 1=错误提示, 1=介于, formula1)） */
+function addList(ws, addr, items) {
+  try {
+    var rng = ws.Range(addr);
+    try { rng.Validation.Delete(); } catch (e0) {}
+    var f = '"' + items.join(',') + '"';
+    rng.Validation.Add(3, 1, 1, f);
+    return true;
+  } catch (e) { return false; }
+}
+
 function colorCell(ws, r, c, num) {
   if (!num) return;
   var k = (Number(num) - 1) % COLORS.length;
@@ -207,11 +218,18 @@ function ensureSheets(teams) {
   widths.push(12);
   setWidths(ws, widths);
   try { ws.Columns(head.length).Hidden = true; } catch (e) {}   // 隐藏 entry_id
+  var opts = [];
+  for (var q = 1; q <= n; q++) opts.push(q);
+  opts.push('淘汰');
+  addList(ws, 'A2:A1000', opts);                                 // 分配状态下拉
 
   // 6. 淘汰池
   ws = ensureSheet('淘汰池');
   writeHeader(ws, ['分配状态', '捞入支队'].concat(BASE_HEAD).concat(['entry_id']));
   setWidths(ws, [10, 10, 6, 10, 10, 14, 14, 6, 14, 18, 12, 8, 14, 18, 30, 10, 12, 12]);
+  var pn = [];
+  for (var q2 = 1; q2 <= n; q2++) pn.push(q2);
+  addList(ws, 'B2:B1000', pn);                                    // 捞入支队下拉
 
   // 7. 各支队分表
   teams.forEach(function (t) {
@@ -221,6 +239,7 @@ function ensureSheets(teams) {
       writeHeader(ts, ['录取状态'].concat(BASE_HEAD).concat(['entry_id']));
       setWidths(ts, [10, 6, 10, 10, 14, 14, 6, 14, 18, 12, 8, 14, 18, 30, 10, 12, 12]);
     }
+    addList(ts, 'A2:A1000', ['录取', '淘汰']);                     // 录取状态下拉（每次都补）
   });
 
   return 'sheets ready: ' + (5 + teams.length) + ' 张';
