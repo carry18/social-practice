@@ -152,6 +152,16 @@ function addRowColor(ws, addr, formula, rgbArr) {
   } catch (e) { return false; }
 }
 
+/* 下拉：引用某区域的文字列表（不受 255 字符限制） */
+function addRangeList(ws, addr, ref) {
+  try {
+    var rng = ws.Range(addr);
+    try { rng.Validation.Delete(); } catch (e0) {}
+    rng.Validation.Add(3, 1, 1, '=' + ref);
+    return true;
+  } catch (e) { return false; }
+}
+
 function colorCell(ws, r, c, num) {
   if (!num) return;
   var k = (Number(num) - 1) % COLORS.length;
@@ -227,13 +237,23 @@ function ensureSheets(teams) {
   ws = ensureSheet('总表');
   var head = ['分配状态'].concat(BASE_HEAD);
   for (var v = 1; v <= n; v++) head.push('志愿' + v);
+  head.push('分配支队');        // 按 A 列序号自动显示队名
   head.push('entry_id');
   writeHeader(ws, head);
   var widths = [10, 6, 10, 10, 14, 14, 6, 14, 18, 12, 8, 14, 18, 30, 10, 12];
   for (var x = 0; x < n; x++) widths.push(26);
+  widths.push(30);
   widths.push(12);
   setWidths(ws, widths);
   try { ws.Columns(head.length).Hidden = true; } catch (e) {}   // 隐藏 entry_id
+  // 已有数据行补「分配支队」公式
+  var assignCol = head.length - 1;
+  for (var rr2 = 2; rr2 <= lastRow(ws); rr2++) {
+    try {
+      ws.Cells(rr2, assignCol).Formula =
+        '=IF($A' + rr2 + '="","",IFERROR(INDEX(支队对照!$B:$B,MATCH($A' + rr2 + ',支队对照!$A:$A,0)),$A' + rr2 + '))';
+    } catch (e3) {}
+  }
   var opts = [];
   for (var q = 1; q <= n; q++) opts.push(q);
   opts.push('淘汰');
@@ -248,10 +268,8 @@ function ensureSheets(teams) {
   // 6. 淘汰池
   ws = ensureSheet('淘汰池');
   writeHeader(ws, ['分配状态', '捞入支队'].concat(BASE_HEAD).concat(['entry_id']));
-  setWidths(ws, [10, 10, 6, 10, 10, 14, 14, 6, 14, 18, 12, 8, 14, 18, 30, 10, 12, 12]);
-  var pn = [];
-  for (var q2 = 1; q2 <= n; q2++) pn.push(q2);
-  addList(ws, 'B2:B1000', pn);                                    // 捞入支队下拉
+  setWidths(ws, [10, 34, 6, 10, 10, 14, 14, 6, 14, 18, 12, 8, 14, 18, 30, 10, 12, 12]);
+  addRangeList(ws, 'B2:B1000', '支队对照!$B$2:$B$' + (n + 1));     // 捞入支队：队名下拉
 
   // 7. 各支队分表
   teams.forEach(function (t) {
@@ -315,6 +333,13 @@ function appendEntries(rows) {
         ws.Range(ws.Cells(rr, volCols[0]), ws.Cells(rr, volCols[volCols.length - 1])).Value2 = [vols];
       }
       ws.Cells(rr, cId).Value2 = row.id;
+      var assignCol2 = m['分配支队'];
+      if (assignCol2) {
+        try {
+          ws.Cells(rr, assignCol2).Formula =
+            '=IF($A' + rr + '="","",IFERROR(INDEX(支队对照!$B:$B,MATCH($A' + rr + ',支队对照!$A:$A,0)),$A' + rr + '))';
+        } catch (e4) {}
+      }
       idx[row.id] = rr;
       added++;
     }
@@ -381,9 +406,13 @@ function reflow(force) {
     var pm = headerMap(ps);
     if (pm['entry_id'] && pm['捞入支队']) {
       readRows(ps).forEach(function (o) {
-        var target = String(fmt1(o.v[pm['捞入支队'] - 1])).trim();
+        var raw = String(fmt1(o.v[pm['捞入支队'] - 1])).trim();
         var tid = String(fmt1(o.v[pm['entry_id'] - 1])).trim();
-        if (target && tid) { assign[tid] = target; picked++; }
+        if (raw && tid) {
+          var mm2 = raw.match(/^(\d+)/);
+          assign[tid] = mm2 ? mm2[1] : raw;      // 「3. 上海…」→ 3
+          picked++;
+        }
       });
     }
   }
