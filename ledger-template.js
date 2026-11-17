@@ -152,9 +152,13 @@ function addList(ws, addr, items) {
 /* 条件格式：按公式整行着色（失败静默跳过） */
 function addRowColor(ws, addr, formula, rgbArr) {
   try {
-    var fc = ws.Range(addr).FormatConditions;
-    var c = fc.Add(2, 1, formula);        // 2 = xlExpression
+    var rng = ws.Range(addr);
+    var fc = rng.FormatConditions;
+    // JSA 各版本常量：xlExpression=2；Formula1 是参数不是枚举，直接传公式字符串
+    var c = fc.Add(2, 0, formula);       // (Type, Operator, Formula1)
+    if (!c) return false;
     c.Interior.Color = RGB(rgbArr[0], rgbArr[1], rgbArr[2]);
+    try { c.Font.Color = RGB(55, 65, 81); } catch (e0) {}
     return true;
   } catch (e) { return false; }
 }
@@ -336,7 +340,7 @@ function appendEntries(rows) {
     } else {
       rr = nextNew; nextNew++;
       ws.Cells(rr, cAssign).Value2 = row.assign || '';
-      colorCell(ws, rr, cAssign, row.assign);
+      // 颜色由条件格式按队名自动渲染
       ws.Range(ws.Cells(rr, m['序号']), ws.Cells(rr, m['序号'] + b.length - 1)).Value2 = [b];
       if (volCols.length) {
         ws.Range(ws.Cells(rr, volCols[0]), ws.Cells(rr, volCols[volCols.length - 1])).Value2 = [vols];
@@ -388,7 +392,9 @@ function clearAllData() {
     var n = lastRow(ws);
     if (n >= 2) {
       try {
-        ws.Range(ws.Cells(2, 1), ws.Cells(n, Math.max(ws.UsedRange.Columns.Count, 20))).ClearContents();
+        var rng = ws.Range(ws.Cells(2, 1), ws.Cells(Math.max(n, 200), Math.max(ws.UsedRange.Columns.Count, 20)));
+        rng.ClearContents();
+        rng.Interior.ColorIndex = -4142;      // 清除底色（含旧的手工色块）
         cleared++;
       } catch (e) {}
     }
@@ -531,7 +537,6 @@ function reflow(force) {
     if (!id2) continue;
     if (assign[id2] !== undefined) {
       ws.Cells(r2, cAssign).Value2 = assign[id2];
-      colorCell(ws, r2, cAssign, assign[id2]);
     }
     if (cStatus && statusOf[id2] !== undefined) ws.Cells(r2, cStatus).Value2 = statusOf[id2];
   }
