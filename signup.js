@@ -281,6 +281,7 @@
     if ($('signup-push')) $('signup-push').disabled = !(hasTerm && current && nActive);
     if ($('signup-sync-choices')) $('signup-sync-choices').disabled = !(hasTerm && current && nActive);
     if ($('signup-repair-order')) $('signup-repair-order').disabled = !(hasTerm && current && nActive);
+    if ($('signup-ledger-script')) $('signup-ledger-script').disabled = !hasTerm;
     if ($('signup-ledger')) $('signup-ledger').disabled = !hasTerm;   // 台账只依赖期次，不依赖报名链接
   }
 
@@ -451,6 +452,58 @@
   }
 
   /* ================= 同步选项到报名表 ================= */
+  /* 查该期是否已登记台账 hook（ledger-map.json），更新提示 */
+  var LEDGER_MAP = 'ledger-map.json';
+  function checkLedger() {
+    var v = termVal();
+    var term = String(v.year || '') + String(v.term || '');
+    var info = $('signup-ledger-info');
+    var btn = $('signup-ledger');
+    if (!term || !info) return;
+    fetch(LEDGER_MAP + '?t=' + Date.now(), { cache: 'no-cache' })
+      .then(function (r) { return r.json(); })
+      .then(function (map) {
+        var cfg = map && map[term];
+        var hasHook = !!(cfg && cfg.hook);
+        if (btn) btn.disabled = !hasHook;
+        info.textContent = hasHook
+          ? '台账已登记：' + term
+          : '本期还没有台账 → 点「📋 复制建表脚本」，到金山新建表格粘贴运行即可';
+        info.style.color = hasHook ? '#2e7d32' : '#b26a00';
+      })
+      .catch(function () { info.textContent = '（台账配置读取失败）'; });
+  }
+
+  /* 复制建表脚本（云函数把 token + 本期支队嵌进模板） */
+  function copyLedgerScript() {
+    var v = termVal();
+    var term = String(v.year || '') + String(v.term || '');
+    if (!term) { setStatus('signup-status', '请先选期次', true); return; }
+    setStatus('signup-status', '正在生成建表脚本…');
+    fetch(FN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'ledgerScript', term: term })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || !d.script) { setStatus('signup-status', '❌ ' + ((d && d.error) || '生成失败'), true); return; }
+        var done = function () {
+          setStatus('signup-status', '✅ 建表脚本已复制（' + d.teams + ' 支）。到金山：新建空白表格 → 效率→AirScript→新建脚本→粘贴→工具栏"服务"加网络API→运行 main()');
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(d.script).then(done).catch(function () {
+            window.prompt('请手动复制下面的脚本（Ctrl/⌘+C）：', d.script);
+            setStatus('signup-status', '已弹出脚本，请手动复制', false);
+          });
+        } else {
+          window.prompt('请手动复制下面的脚本（Ctrl/⌘+C）：', d.script);
+          setStatus('signup-status', '已弹出脚本，请手动复制', false);
+        }
+      })
+      .catch(function () { setStatus('signup-status', '❌ 网络错误：生成脚本失败', true); });
+  }
+
   /* 建/同步金山实践台账：云函数读预算表 + 拉金数据 → 推 AirScript */
   function syncLedger() {
     var v = termVal();
@@ -563,6 +616,12 @@
     $('signup-push').addEventListener('click', downloadPush);
     var sc = $('signup-sync-choices');
     if (sc) sc.addEventListener('click', function () { syncChoices(false); });
+    var ls = $('signup-ledger-script');
+    if (ls) ls.addEventListener('click', copyLedgerScript);
+    ['signup-year', 'signup-term'].forEach(function (id) {
+      var elx = $(id);
+      if (elx) elx.addEventListener('change', function () { setTimeout(checkLedger, 50); });
+    });
     var lg = $('signup-ledger');
     if (lg) lg.addEventListener('click', syncLedger);
     var rp = $('signup-repair-order');
@@ -616,6 +675,8 @@
       if (!key) { renderTeams([], '先选期次', false); return; }
       loadTeamsForTerm(key, v.year, v.term, true);
     });
+
+    setTimeout(checkLedger, 300);   // 进页面先看本期台账是否已登记
 
   }
 

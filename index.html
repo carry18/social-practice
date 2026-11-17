@@ -400,7 +400,9 @@
         <button class="btn" id="signup-push" disabled>⬇️ 下载推送 Word（含二维码）</button>
         <button class="btn secondary" id="signup-sync-choices" disabled style="margin-left:8px">🔄 同步选项到报名表</button>
         <button class="btn secondary" id="signup-repair-order" disabled style="margin-left:8px" title="按当前队伍顺序重建选项（会重建 api_code，已有答卷的支队选择会失效）">🔧 修复选项顺序</button>
+        <button class="btn secondary" id="signup-ledger-script" disabled style="margin-left:8px" title="复制本期建表脚本（含支队信息），去金山新建表格粘贴后运行一次即可建好台账">📋 复制建表脚本</button>
         <button class="btn secondary" id="signup-ledger" disabled style="margin-left:8px" title="把本期支队信息 + 全部答卷推到金山的实践台账（自动建表/增量入库/归位）">🧾 建/同步台账</button>
+        <span id="signup-ledger-info" style="font-size:12px;color:#666;margin-left:8px"></span>
         <span id="signup-status" style="font-size:13px;margin-left:10px"></span>
       </div>
 
@@ -459,7 +461,7 @@
 <script src="https://cdn.jsdelivr.net/npm/pizzip@3.1.7/dist/pizzip.min.js"></script>
 <script src="app.js?v=20261215"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
-<script src="signup.js?v=20261219"></script>
+<script src="signup.js?v=20261220"></script>
 <script src="enterprise.js?v=20261114"></script>
 <script src="payout.js?v=20261118"></script>
 <script src="note.js?v=20261105m"></script>
