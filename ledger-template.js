@@ -247,7 +247,7 @@ function ensureSheets(teams) {
 
   // 5. 总表
   ws = ensureSheet('总表');
-  var head = ['分配状态'].concat(BASE_HEAD);
+  var head = ['分配状态'].concat(BASE_HEAD).concat(['录取状态']);
   for (var v = 1; v <= n; v++) head.push('志愿' + v);
   head.push('分配支队');        // 按 A 列序号自动显示队名
   head.push('entry_id');
@@ -401,7 +401,7 @@ function reflow(force) {
     readRows(ts).forEach(function (o) {
       var status = String(fmt1(o.v[0])).trim();
       var tid = String(fmt1(o.v[tm['entry_id'] - 1])).trim();
-      if (tid && status === '淘汰') { assign[tid] = '淘汰'; moved++; }
+      if (tid && status === '淘汰') { assign[tid] = '淘汰'; statusOf[tid] = '淘汰'; moved++; }
       else if (tid && status) { statusOf[tid] = status; }
     });
   });
@@ -424,13 +424,16 @@ function reflow(force) {
     }
   }
 
-  // ③ 写回总表
+  // ③ 写回总表（分配状态 + 录取状态）
+  var cStatus = m['录取状态'];
   for (var r2 = 2; r2 <= n; r2++) {
     var id2 = String(fmt1(ws.Cells(r2, cId).Value2)).trim();
-    if (id2 && assign[id2] !== undefined) {
+    if (!id2) continue;
+    if (assign[id2] !== undefined) {
       ws.Cells(r2, cAssign).Value2 = assign[id2];
       colorCell(ws, r2, cAssign, assign[id2]);
     }
+    if (cStatus && statusOf[id2] !== undefined) ws.Cells(r2, cStatus).Value2 = statusOf[id2];
   }
 
   // ④ 重建分表与淘汰池
@@ -466,7 +469,7 @@ function reflow(force) {
       var vals = pickByHeader(o.v, m, tm, 1);          // 跳过「录取状态」
       ts.Range(ts.Cells(i + 2, 2), ts.Cells(i + 2, 2 + vals.length - 1)).Value2 = [vals];
       var oid = String(fmt1(o.v[m['entry_id'] - 1])).trim();
-      ts.Cells(i + 2, 1).Value2 = statusOf[oid] || '';  // 恢复「录取」等标记
+      ts.Cells(i + 2, 1).Value2 = statusOf[oid] || '';  // 恢复「录取/淘汰」标记
     });
     rebuilt++;
   });
@@ -562,9 +565,13 @@ function logRun(text) {
 function main() {
   var out = [];
   try {
-    if (CONFIG.teams && CONFIG.teams.length) out.push(ensureSheets(CONFIG.teams));
-    out.push(syncEntries());
-    out.push(reflow(true));
+    if (!headerOk()) {                       // 表结构过期/有重复数据 → 清空重建
+      out.push(resetAll());
+    } else {
+      if (CONFIG.teams && CONFIG.teams.length) out.push(ensureSheets(CONFIG.teams));
+      out.push(syncEntries());
+      out.push(reflow(true));
+    }
   } catch (e) {
     out.push('失败：' + (e && e.message ? e.message : e));
   }
@@ -584,4 +591,5 @@ if (action === 'ensure') {
 if (action === 'appendEntries') return appendEntries(argv.rows || []);
 if (action === 'reflow') return reflow();
 if (action === 'main') return main();
+if (action === 'reset') return resetAll();
 return '未知 action: ' + action;
