@@ -285,7 +285,7 @@ function ensureSheets(teams) {
     addRowColor(ts, 'A2:A1000', '=$A2="录取"', [199, 239, 206]);   // 只给状态格上色
   });
 
-  return 'sheets ready: ' + (5 + teams.length) + ' 张';
+  return 'sheets ready: ' + (6 + teams.length) + ' 张';
 }
 
 /* ---------------- appendEntries：入库 ---------------- */
@@ -313,6 +313,7 @@ function appendEntries(rows) {
     return out;
   };
 
+  var nextNew = Object.keys(idx).length ? (lastRow(ws) + 1) : 2;
   var added = 0, updated = 0;
   rows.forEach(function (row) {
     if (!row || !row.id) return;
@@ -325,7 +326,7 @@ function appendEntries(rows) {
       }
       updated++;
     } else {
-      rr = lastRow(ws) + 1;
+      rr = nextNew; nextNew++;
       ws.Cells(rr, cAssign).Value2 = row.assign || '';
       colorCell(ws, rr, cAssign, row.assign);
       ws.Range(ws.Cells(rr, m['序号']), ws.Cells(rr, m['序号'] + b.length - 1)).Value2 = [b];
@@ -383,6 +384,8 @@ function headerOk() {
 /* 清空重建：保留每人的录取状态与分配，重建后恢复 */
 function resetAll() {
   var ws = sheet('总表');
+  if (ws && headerOk()) { try { reflow(true); } catch (e00) {} }   // 先把分表里的录取状态收回总表
+
   var keep = {};
   if (ws && headerOk()) {
     var m = headerMap(ws), cId = m['entry_id'];
@@ -608,13 +611,7 @@ function logRun(text) {
 function main() {
   var out = [];
   try {
-    if (!headerOk()) {                       // 表结构过期/有重复数据 → 清空重建
-      out.push(resetAll());
-    } else {
-      if (CONFIG.teams && CONFIG.teams.length) out.push(ensureSheets(CONFIG.teams));
-      out.push(syncEntries());
-      out.push(reflow(true));
-    }
+    out.push(resetAll());                    // 每次全量重建，避免历史脏行/重复
   } catch (e) {
     out.push('失败：' + (e && e.message ? e.message : e));
   }
