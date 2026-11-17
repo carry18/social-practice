@@ -638,14 +638,20 @@ function main() {
     var wsT = sheet('总表');
     if (wsT && headerOk()) {                  // 找出「有内容但没有 entry_id」的历史脏行
       var mT = headerMap(wsT), cT = mT['entry_id'];
+      var rowsT = 0, seen = {}, dup = false;
       for (var rT = 2; rT <= lastRow(wsT); rT++) {
         var idT = String(fmt1(wsT.Cells(rT, cT).Value2)).trim();
         var anyT = false;
         for (var cT2 = 2; cT2 <= cT; cT2++) {
           if (String(fmt1(wsT.Cells(rT, cT2).Value2)).trim() !== '') { anyT = true; break; }
         }
-        if (!idT && anyT) { stale = true; break; }
+        if (!anyT) continue;
+        rowsT++;
+        if (!idT) { stale = true; break; }      // 有内容没 entry_id → 旧结构残留
+        if (seen[idT]) { dup = true; break; }   // 同一人出现多次 → 重复行
+        seen[idT] = 1;
       }
+      if (!stale && dup) stale = true;
     }
     if (!headerOk() || stale) {
       out.push(resetAll());                   // 结构过期 / 有脏行 → 清空重建
