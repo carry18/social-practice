@@ -34,6 +34,9 @@ var CONFIG = {
 };
 /* ======================================= */
 
+/* 手动开关：改成 true 跑一次 = 强制清空重建（跑完记得改回 false） */
+var FORCE_RESET = false;
+
 var argv = (typeof Context !== 'undefined' && Context && Context.argv) || {};
 var action = argv.action || 'ping';
 
@@ -653,7 +656,7 @@ function main() {
       }
       if (!stale && dup) stale = true;
     }
-    if (!headerOk() || stale) {
+    if (FORCE_RESET || !headerOk() || stale) {
       out.push(resetAll());                   // 结构过期 / 有脏行 → 清空重建
     } else {
       if (CONFIG.teams && CONFIG.teams.length) out.push(ensureSheets(CONFIG.teams));
