@@ -480,7 +480,7 @@ function reflow(force) {
     var lock = ensureSheet('同步日志');
     var last = Number(lock.Cells(1, 4).Value2 || 0);
     var now = new Date().getTime();
-    if (!force && last && now - last < 30000) return 'reflow skipped (30s 防抖)';
+    if (!force && last && now - last < 20000) return 'reflow skipped (20s 防抖)';
     lock.Cells(1, 4).Value2 = now;
   } catch (e0) {}
 
@@ -664,7 +664,11 @@ function logRun(text) {
   if (r > 500) { try { ws.Range('A2:B' + (r - 400)).ClearContents(); } catch (e) {} }
 }
 
-/* 定时任务入口：建表(首次) + 拉答卷 + 归位 */
+/* 定时任务入口：建表(首次) + 拉答卷 + 归位
+   用法：定时任务 A：每 10 分钟跑 main()（同步金数据）
+         定时任务 B：每小时每分（即每分钟）跑 main()（也含归位，因为 reflow 内部有 20s 防抖）
+   说明：main() 里 reflow 是同步执行的，所以不需要单独的"每分钟归位"任务；
+         金数据 API 限额 100 次/小时，main() 每分钟跑 = 60 次/小时，够用且安全。 */
 function main() {
   var out = [];
   try {
