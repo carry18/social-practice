@@ -405,7 +405,7 @@ function headerOk() {
 }
 
 /* 清空重建：保留每人的录取状态与分配，重建后恢复 */
-function resetAll() {
+function resetAll(hard) {
   var ws = sheet('总表');
   if (ws && headerOk()) { try { reflow(true); } catch (e00) {} }   // 先把分表里的录取状态收回总表
 
@@ -422,7 +422,33 @@ function resetAll() {
       };
     }
   }
-  var cleared = clearAllData();
+  var cleared = 0;
+  if (hard) {
+    // 硬重建：直接删掉数据表（总表/淘汰池/选项/各支队分表），再整表新建
+    var del = ['总表', '淘汰池', '选项'];
+    var tz0 = sheet('支队对照');
+    if (tz0) {
+      var tzm0 = headerMap(tz0);
+      for (var t0 = 2; t0 <= lastRow(tz0); t0++) {
+        var nm0 = String(fmt1(tz0.Cells(t0, tzm0['支队名（=分表名）']).Value2)).trim();
+        if (nm0) del.push(nm0);
+      }
+    }
+    del.forEach(function (nmD) {
+      var sd = sheet(nmD);
+      if (!sd) return;
+      try { sd.Delete(); cleared++; } catch (eD) {}
+    });
+    // 支队对照里的队名如果还没有（首次），用 CONFIG.teams 兜底
+    if (!tz0 && CONFIG.teams) {
+      CONFIG.teams.forEach(function (tD) {
+        var sD = sheet(String(tD.label).substring(0, 31));
+        if (sD) { try { sD.Delete(); cleared++; } catch (eD2) {} }
+      });
+    }
+  } else {
+    cleared = clearAllData();
+  }
   var msg = ensureSheets(CONFIG.teams || []);
   var sync = syncEntries();
   var ws2 = sheet('总表');
@@ -657,7 +683,7 @@ function main() {
       if (!stale && dup) stale = true;
     }
     if (FORCE_RESET || !headerOk() || stale) {
-      out.push(resetAll());                   // 结构过期 / 有脏行 → 清空重建
+      out.push(resetAll(FORCE_RESET));        // FORCE_RESET=true 走"删表重建"，否则只清数据行
     } else {
       if (CONFIG.teams && CONFIG.teams.length) out.push(ensureSheets(CONFIG.teams));
       out.push(syncEntries());
