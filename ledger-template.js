@@ -182,7 +182,7 @@ function ensureSheets(teams) {
   opt.Range('A2:A3').Value2 = [['录取'], ['淘汰']];
   for (var oi = 1; oi <= n; oi++) {
     opt.Cells(1 + oi, 2).Value2 = teams[oi - 1].label;
-    opt.Cells(1 + oi, 3).Value2 = Number(teams[oi - 1].num);
+    opt.Cells(1 + oi, 3).Value2 = teams[oi - 1].label;
   }
   opt.Cells(n + 2, 3).Value2 = '淘汰';
   try { opt.Columns('A:C').Hidden = true; } catch (e0) {}
@@ -198,7 +198,7 @@ function ensureSheets(teams) {
       Number(t.num), t.label, Number(t.quota) || 12, '',
       t.place || '', t.dept || '', t.date || '', Number(t.people) || 12
     ]];
-    ws.Cells(r, 4).Formula = '=COUNTIF(总表!$A:$A,' + Number(t.num) + ')';
+    ws.Cells(r, 4).Formula = '=COUNTIF(总表!$A:$A,B' + r + ')';
     colorCell(ws, r, 3, t.num);
   });
 
@@ -249,27 +249,18 @@ function ensureSheets(teams) {
   ws = ensureSheet('总表');
   var head = ['分配状态'].concat(BASE_HEAD).concat(['录取状态']);
   for (var v = 1; v <= n; v++) head.push('志愿' + v);
-  head.push('分配支队');        // 按 A 列序号自动显示队名
   head.push('entry_id');
   writeHeader(ws, head);
-  var widths = [10, 6, 10, 10, 14, 14, 6, 14, 18, 12, 8, 14, 18, 30, 10, 12];
+  var widths = [34, 6, 10, 10, 14, 14, 6, 14, 18, 12, 8, 14, 18, 30, 10, 12];
   for (var x = 0; x < n; x++) widths.push(26);
-  widths.push(30);
   widths.push(12);
   setWidths(ws, widths);
   try { ws.Columns(head.length).Hidden = true; } catch (e) {}   // 隐藏 entry_id
-  // 已有数据行补「分配支队」公式
-  var assignCol = head.length - 1;
-  for (var rr2 = 2; rr2 <= lastRow(ws); rr2++) {
-    try {
-      ws.Cells(rr2, assignCol).Formula =
-        '=IF($A' + rr2 + '="","",IFERROR(INDEX(支队对照!$B:$B,MATCH($A' + rr2 + ',支队对照!$A:$A,0)),$A' + rr2 + '))';
-    } catch (e3) {}
-  }
   addRangeList(ws, 'A2:A1000', '选项!$C$2:$C$' + (n + 2));        // 分配状态下拉
   try { ws.Range('A2:A1000').FormatConditions.Delete(); } catch (e1) {}
   for (var ci = 1; ci <= n && ci <= COLORS.length; ci++) {
-    addRowColor(ws, 'A2:A1000', '=$A2=' + ci, COLORS[ci - 1]);    // 只给分配状态格上色
+    var lbl = String(teams[ci - 1].label).replace(/"/g, '');
+    addRowColor(ws, 'A2:A1000', '=$A2="' + lbl + '"', COLORS[ci - 1]);   // 按队名上色
   }
 
   // 6. 淘汰池
@@ -340,13 +331,6 @@ function appendEntries(rows) {
         ws.Range(ws.Cells(rr, volCols[0]), ws.Cells(rr, volCols[volCols.length - 1])).Value2 = [vols];
       }
       ws.Cells(rr, cId).Value2 = row.id;
-      var assignCol2 = m['分配支队'];
-      if (assignCol2) {
-        try {
-          ws.Cells(rr, assignCol2).Formula =
-            '=IF($A' + rr + '="","",IFERROR(INDEX(支队对照!$B:$B,MATCH($A' + rr + ',支队对照!$A:$A,0)),$A' + rr + '))';
-        } catch (e4) {}
-      }
       idx[row.id] = rr;
       added++;
     }
@@ -415,11 +399,7 @@ function reflow(force) {
       readRows(ps).forEach(function (o) {
         var raw = String(fmt1(o.v[pm['捞入支队'] - 1])).trim();
         var tid = String(fmt1(o.v[pm['entry_id'] - 1])).trim();
-        if (raw && tid) {
-          var mm2 = raw.match(/^(\d+)/);
-          assign[tid] = mm2 ? mm2[1] : raw;      // 「3. 上海…」→ 3
-          picked++;
-        }
+        if (raw && tid) { assign[tid] = raw; picked++; }   // 直接存队名
       });
     }
   }
@@ -448,24 +428,23 @@ function reflow(force) {
   });
 
   var rebuilt = 0;
-  var teams = {};
+  var teamNames = [];
   var tz = sheet('支队对照');
   if (tz) {
     var tzm = headerMap(tz);
     for (var t = 2; t <= lastRow(tz); t++) {
-      var num = String(fmt1(tz.Cells(t, tzm['序号']).Value2)).trim();
       var nm = String(fmt1(tz.Cells(t, tzm['支队名（=分表名）']).Value2)).trim();
-      if (num && nm) teams[num] = nm;
+      if (nm) teamNames.push(nm);
     }
   }
 
-  Object.keys(teams).forEach(function (num) {
-    var ts = sheet(teams[num]);
+  teamNames.forEach(function (nm) {
+    var ts = sheet(nm);
     if (!ts) return;
     var tm = headerMap(ts);
     var tn = lastRow(ts);
     if (tn >= 2) ts.Range(ts.Cells(2, 1), ts.Cells(tn, tm['entry_id'])).ClearContents();
-    (byTeam[num] || []).forEach(function (o, i) {
+    (byTeam[nm] || []).forEach(function (o, i) {
       var vals = pickByHeader(o.v, m, tm, 1);          // 跳过「录取状态」
       ts.Range(ts.Cells(i + 2, 2), ts.Cells(i + 2, 2 + vals.length - 1)).Value2 = [vals];
       var oid = String(fmt1(o.v[m['entry_id'] - 1])).trim();
@@ -517,13 +496,9 @@ function ledgerRowOf(e) {
   };
   var sorted = (e.field_16 || []).slice().sort(function (a, b) { return (a.rank || 99) - (b.rank || 99); });
   var vols = sorted.map(function (it) { return String(it.choice || '').trim(); });   // 志愿列写文本
-  var firstNum = '';
-  if (sorted.length) {
-    var mm = String(sorted[0].choice || '').match(/^\s*(\d+)\./);
-    if (mm) firstNum = mm[1];
-  }
+  var firstLabel = sorted.length ? String(sorted[0].choice || '').trim() : '';
   return {
-    id: e.token, sn: e.serial_number, assign: firstNum, vols: vols,
+    id: e.token, sn: e.serial_number, assign: firstLabel, vols: vols,
     name: g('field_1'), minority: g('field_2'), sid: g('field_3'), phone: g('field_4'),
     gender: g('field_5'), dept: g('field_18'), major: g('field_7'), grad: g('field_8'),
     degree: g('field_9'), bschool: g('field_10'), bmajor: g('field_11'), resume: g('field_12'),
