@@ -187,7 +187,8 @@ function ensureSheets(teams) {
     opt.Cells(1 + oi, 3).Value2 = teams[oi - 1].label;
   }
   opt.Cells(n + 2, 3).Value2 = '淘汰';
-  try { opt.Columns('A:C').Hidden = true; } catch (e0) {}
+  try { opt.Columns('A:C').Hidden = false; } catch (e0) {}       // 列不要隐藏（否则看起来是空表）
+  try { opt.Visible = false; } catch (e1) {}                      // 整张表隐藏
 
   // 1. 支队对照
   var ws = ensureSheet('支队对照');
