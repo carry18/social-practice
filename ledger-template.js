@@ -163,20 +163,44 @@ function addList(ws, addr, items) {
 }
 
 /* 条件格式：按公式整行着色（失败静默跳过） */
-/* 整列条件格式：单元格文本 = text 时整格上色（非公式，兼容性更好） */
+/* 直接给总表 A 列涂色（不依赖条件格式，最稳） */
+function paintAssignCol() {
+  var ws = sheet('总表');
+  if (!ws) return;
+  var m = headerMap(ws);
+  var cA = m['分配状态'] || 1;
+  var cmap = {};
+  (CONFIG.teams || []).forEach(function (t, i) {
+    cmap[t.label] = COLORS[i % COLORS.length];
+  });
+  for (var r = 2; r <= lastRow(ws); r++) {
+    var v = String(fmt1(ws.Cells(r, cA).Value2)).trim();
+    var p = cmap[v];
+    if (p) {
+      ws.Cells(r, cA).Interior.Color = RGB(p[0], p[1], p[2]);
+      ws.Cells(r, cA).Font.Color = RGB(TEXT_DARK[0], TEXT_DARK[1], TEXT_DARK[2]);
+    } else {
+      try { ws.Cells(r, cA).Interior.ColorIndex = -4142; } catch (e) {}
+    }
+  }
+}
+
+/* 整列条件格式：单元格文本 = text 时整格上色；同一工作表只建一次（防重复规则） */
+var _cfDone = {};
 function addColColor(ws, colLetter, text, rgbArr) {
+  var key = String(ws.Name) + '|' + colLetter + '|' + String(text);
+  if (_cfDone[key]) return true;
   try {
     var rng = ws.Range(colLetter + ':' + colLetter);
     var fc = rng.FormatConditions;
-    try { fc.Delete(); } catch (e0) {}            // 先清掉旧规则
-    // 尝试多种 JSA 写法：文本匹配
     var c = null;
-    try { c = fc.Add(1, 2, '"' + text + '"'); } catch (e1) {}          // (1=文本, 2=等于)
+    try { c = fc.Add(1, 2, '"' + text + '"'); } catch (e1) {}          // 文本=等于
     if (!c) { try { c = fc.AddText(text); } catch (e2) {} }
     if (!c) { try { c = fc.Add(2, 0, '=' + colLetter + '1="' + text + '"'); } catch (e3) {} }
     if (!c) return false;
     c.Interior.Color = RGB(rgbArr[0], rgbArr[1], rgbArr[2]);
     try { c.Font.Color = RGB(55, 65, 81); } catch (e4) {}
+    _cfDone[key] = true;
     return true;
   } catch (e) { return false; }
 }
@@ -377,6 +401,7 @@ function appendEntries(rows) {
     }
   });
 
+  paintAssignCol();
   return 'added=' + added + ', updated=' + updated + ', total=' + (lastRow(ws) - 1);
 }
 
@@ -492,10 +517,11 @@ function resetAll(hard) {
       var k = keep[id2];
       if (!k) continue;
       if (k.status) ws2.Cells(r2, st2).Value2 = k.status;
-      if (k.assign) { ws2.Cells(r2, as2).Value2 = k.assign; colorCell(ws2, r2, as2, null); }
+      if (k.assign) { ws2.Cells(r2, as2).Value2 = k.assign; }
     }
   }
   var rf = reflow(true);
+  paintAssignCol();
   return 'reset: 清空 ' + cleared + ' 张表 | ' + msg + ' | ' + sync + ' | ' + rf;
 }
 
@@ -619,6 +645,7 @@ function reflow(force) {
     });
   }
 
+  paintAssignCol();
   return 'reflow: 淘汰=' + moved + ', 捞起=' + picked + ', 分表重建=' + rebuilt + ', 淘汰池=' + pool.length;
 }
 
