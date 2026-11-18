@@ -163,17 +163,30 @@ function addList(ws, addr, items) {
 }
 
 /* 条件格式：按公式整行着色（失败静默跳过） */
-function addRowColor(ws, addr, formula, rgbArr) {
+/* 整列条件格式：单元格文本 = text 时整格上色（非公式，兼容性更好） */
+function addColColor(ws, colLetter, text, rgbArr) {
   try {
-    var rng = ws.Range(addr);
+    var rng = ws.Range(colLetter + ':' + colLetter);
     var fc = rng.FormatConditions;
-    // JSA 各版本常量：xlExpression=2；Formula1 是参数不是枚举，直接传公式字符串
-    var c = fc.Add(2, 0, formula);       // (Type, Operator, Formula1)
+    try { fc.Delete(); } catch (e0) {}            // 先清掉旧规则
+    // 尝试多种 JSA 写法：文本匹配
+    var c = null;
+    try { c = fc.Add(1, 2, '"' + text + '"'); } catch (e1) {}          // (1=文本, 2=等于)
+    if (!c) { try { c = fc.AddText(text); } catch (e2) {} }
+    if (!c) { try { c = fc.Add(2, 0, '=' + colLetter + '1="' + text + '"'); } catch (e3) {} }
     if (!c) return false;
     c.Interior.Color = RGB(rgbArr[0], rgbArr[1], rgbArr[2]);
-    try { c.Font.Color = RGB(55, 65, 81); } catch (e0) {}
+    try { c.Font.Color = RGB(55, 65, 81); } catch (e4) {}
     return true;
   } catch (e) { return false; }
+}
+
+/* 旧函数保留为别名（整列 + 文本匹配） */
+function addRowColor(ws, addr, formula, rgbArr) {
+  var col = String(addr).split('2:')[0].split('1:')[0].replace(/[0-9]/g, '');
+  var m = String(formula).match(/"(.+)"/);
+  var text = m ? m[1] : String(formula).replace(/[=$A-Z0-9]/g, '');
+  return addColColor(ws, col, text, rgbArr);
 }
 
 /* 下拉：引用某区域的文字列表（不受 255 字符限制） */
@@ -287,7 +300,7 @@ function ensureSheets(teams) {
   try { ws.Range('A2:A1000').FormatConditions.Delete(); } catch (e1) {}
   for (var ci = 1; ci <= n && ci <= COLORS.length; ci++) {
     var lbl = String(teams[ci - 1].label).replace(/"/g, '');
-    addRowColor(ws, 'A2:A1000', '=$A2="' + lbl + '"', COLORS[ci - 1]);   // 按队名上色
+    addColColor(ws, 'A', lbl, COLORS[ci - 1]);                            // 整列按队名匹配
   }
 
   // 6. 淘汰池
@@ -306,8 +319,8 @@ function ensureSheets(teams) {
     }
     addRangeList(ts, 'A2:A1000', '选项!$A$2:$A$3');                // 录取状态下拉
     try { ts.Range('A2:A1000').FormatConditions.Delete(); } catch (e2) {}
-    addRowColor(ts, 'A2:A1000', '=$A2="淘汰"', [237, 237, 237]);
-    addRowColor(ts, 'A2:A1000', '=$A2="录取"', [214, 242, 222]);   // 只给状态格上色
+    addColColor(ts, 'A', '淘汰', [237, 237, 237]);
+    addColColor(ts, 'A', '录取', [214, 242, 222]);                      // 整列按状态匹配
   });
 
   return 'sheets ready: ' + (6 + teams.length) + ' 张';
