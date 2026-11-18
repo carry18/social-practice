@@ -8,7 +8,7 @@
  *   action = 'ping'            连通自检，返回 pong
  *   action = 'ensure'          建表 + 入库（argv.teams 支队列表，argv.rows 答卷行）
  *   action = 'appendEntries'   只入库（表已存在时用）
- *   action = 'reflow'          归位：分表「淘汰」→ 淘汰池；淘汰池「捞入支队」→ 回分表
+ *   action = 'reflow'          归位：分表「淘汰」→ 调剂池；调剂池「捞入支队」→ 回分表
  *
  * 表结构（一期一份文档）：
  *   支队对照       序号 | 支队名（=分表名） | 名额 | 已分配 | 地点 | 院系 | 参访时间 | 人数
@@ -20,7 +20,7 @@
  *   总表           分配状态 | 序号 | 姓名 | 少干/定向 | 学号 | 手机号 | 性别 | 院系 | 专业
  *                  | 拟毕业时间 | 学历 | 本科院校 | 本科专业 | 简历链接 | 愿任支队长 | 家乡
  *                  | 志愿1..N | entry_id
- *   淘汰池         分配状态 | 捞入支队 | 序号 | 姓名 | … | entry_id
+ *   调剂池         分配状态 | 捞入支队 | 序号 | 姓名 | … | entry_id
  *   各支队分表     录取状态 | 序号 | 姓名 | … | 家乡 | entry_id
  * ------------------------------------------------------------------
  */
@@ -286,16 +286,9 @@ function ensureSheets(teams) {
   ws = ensureSheet('企业联络需求表');
   writeHeader(ws, ['序号', '支队名', '企业名称', '企业联系人', '职位', '企业联系方式', '备注']);
   setWidths(ws, [6, 34, 40, 14, 14, 16, 20]);
-  if (lastRow(ws) < 2) {
-    var r3 = 2;
-    teams.forEach(function (t) {
-      String(t.company || '').split(/[、,，;；\n]+/).forEach(function (comp) {
-        comp = String(comp || '').replace(/[（(]\s*(承担住宿|住宿自理)\s*[）)]/g, '').trim();
-        if (!comp) return;
-        ws.Range(ws.Cells(r3, 1), ws.Cells(r3, 3)).Value2 = [[Number(t.num), t.label, comp]];
-        r3++;
-      });
-    });
+  // 联络需求表留空（只建表头，内容人工补）
+  if (lastRow(ws) >= 2) {
+    try { ws.Range(ws.Cells(2, 1), ws.Cells(1000, 7)).ClearContents(); } catch (e0) {}
   }
 
   // 4. 开函统计
@@ -303,10 +296,9 @@ function ensureSheets(teams) {
   writeHeader(ws, ['批次', '序号', '院系', '单位名称', '对方单位是否审核完毕', '是否上传网盘',
                    '联系人', '联系方式', '上传时间', '已盖章', '院系接受后备注', '备注']);
   setWidths(ws, [8, 6, 24, 36, 14, 12, 10, 14, 12, 8, 18, 16]);
-  if (lastRow(ws) < teams.length + 1) {
-    teams.forEach(function (t, i) {
-      ws.Range(ws.Cells(i + 2, 1), ws.Cells(i + 2, 3)).Value2 = [['', Number(t.num), t.dept || '']];
-    });
+  // 开函统计留空（只建表头）
+  if (lastRow(ws) >= 2) {
+    try { ws.Range(ws.Cells(2, 1), ws.Cells(1000, 12)).ClearContents(); } catch (e1) {}
   }
 
   // 5. 总表
@@ -327,8 +319,8 @@ function ensureSheets(teams) {
     addColColor(ws, 'A', lbl, COLORS[ci - 1]);                            // 整列按队名匹配
   }
 
-  // 6. 淘汰池
-  ws = ensureSheet('淘汰池');
+  // 6. 调剂池
+  ws = ensureSheet('调剂池');
   writeHeader(ws, ['分配状态', '捞入支队'].concat(BASE_HEAD).concat(['entry_id']));
   setWidths(ws, [10, 34, 6, 10, 10, 14, 14, 6, 14, 18, 12, 8, 14, 18, 30, 10, 12, 12]);
   addRangeList(ws, 'B2:B1000', '选项!$B$2:$B$' + (n + 1));        // 捞入支队：队名下拉
@@ -429,7 +421,7 @@ function sameMatrix(ws, ncol, desired) {
 
 /* 清空所有数据行（保留表头/样式/下拉） */
 function clearAllData() {
-  var names = ['总表', '淘汰池'];
+  var names = ['总表', '调剂池'];
   for (var i = 1; i <= Application.Sheets.Count; i++) {
     var nm = Application.Sheets.Item(i).Name;
     if (names.indexOf(nm) < 0) names.push(nm);
@@ -482,8 +474,8 @@ function resetAll(hard) {
   }
   var cleared = 0;
   if (hard) {
-    // 硬重建：直接删掉数据表（总表/淘汰池/选项/各支队分表），再整表新建
-    var del = ['总表', '淘汰池', '选项'];
+    // 硬重建：直接删掉数据表（总表/调剂池/选项/各支队分表），再整表新建
+    var del = ['总表', '调剂池', '选项'];
     var tz0 = sheet('支队对照');
     if (tz0) {
       var tzm0 = headerMap(tz0);
@@ -555,7 +547,7 @@ function reflow(force) {
   var sheetNames = [];
   for (var i = 1; i <= Application.Sheets.Count; i++) sheetNames.push(Application.Sheets.Item(i).Name);
   sheetNames.forEach(function (name) {
-    if (name === '总表' || name === '淘汰池' || name === '支队对照' || name === '支队概况总览' ||
+    if (name === '总表' || name === '调剂池' || name === '支队对照' || name === '支队概况总览' ||
         name === '企业联络需求表' || name === '开函统计') return;
     var ts = sheet(name);
     if (!ts) return;
@@ -569,8 +561,8 @@ function reflow(force) {
     });
   });
 
-  // ② 淘汰池「捞入支队」
-  var ps = sheet('淘汰池');
+  // ② 调剂池「捞入支队」
+  var ps = sheet('调剂池');
   var picked = 0;
   if (ps) {
     var pm = headerMap(ps);
@@ -594,7 +586,7 @@ function reflow(force) {
     if (cStatus && statusOf[id2] !== undefined) ws.Cells(r2, cStatus).Value2 = statusOf[id2];
   }
 
-  // ④ 重建分表与淘汰池
+  // ④ 重建分表与调剂池
   var all = readRows(ws);
   var byTeam = {}, pool = [];
   all.forEach(function (o) {
@@ -646,7 +638,7 @@ function reflow(force) {
   }
 
   paintAssignCol();
-  return 'reflow: 淘汰=' + moved + ', 捞起=' + picked + ', 分表重建=' + rebuilt + ', 淘汰池=' + pool.length;
+  return 'reflow: 淘汰=' + moved + ', 捞起=' + picked + ', 分表重建=' + rebuilt + ', 调剂池=' + pool.length;
 }
 
 /* ---------------- 金数据拉取（金山定时任务调用） ---------------- */
@@ -791,9 +783,9 @@ function verify() {
     if (a) assignCount[a] = (assignCount[a] || 0) + 1;
   }
 
-  // 分表人数与总表一致（淘汰的应去淘汰池）
+  // 分表人数与总表一致（淘汰的应去调剂池）
   var poolCount = 0;
-  var ps = sheet('淘汰池');
+  var ps = sheet('调剂池');
   if (ps) {
     for (var p2 = 2; p2 <= lastRow(ps); p2++) {
       var any2 = false;
@@ -827,13 +819,13 @@ function verify() {
   else ok++;
   if (teamRows !== expectedTeam) issues.push('分表人数 ' + teamRows + ' ≠ 总表非淘汰 ' + expectedTeam);
   else ok++;
-  if (poolCount !== expectedPool) issues.push('淘汰池 ' + poolCount + ' ≠ 总表淘汰 ' + expectedPool);
+  if (poolCount !== expectedPool) issues.push('调剂池 ' + poolCount + ' ≠ 总表淘汰 ' + expectedPool);
   else ok++;
   if (!m['录取状态'] || !m['entry_id']) issues.push('表头缺列（录取状态/entry_id）');
   else ok++;
 
   return (issues.length ? '❌ ' : '✅ 体检通过 ') + ok + ' 项正常' +
-         (issues.length ? '，问题：' + issues.join('；') : '（总表 ' + rows + ' 行，分表 ' + teamRows + '，淘汰池 ' + poolCount + '）');
+         (issues.length ? '，问题：' + issues.join('；') : '（总表 ' + rows + ' 行，分表 ' + teamRows + '，调剂池 ' + poolCount + '）');
 }
 
 /* ---------------- 入口 ---------------- */
