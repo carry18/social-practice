@@ -57,6 +57,19 @@ function sheet(name) {
   try { return Application.Sheets(name); } catch (e) { return null; }
 }
 
+function lastDataRow(ws) {
+  var n = lastRow(ws);
+  var ncol = Math.min(ws.UsedRange.Columns.Count, 30);
+  for (var r = n; r >= 2; r--) {
+    var has = false;
+    for (var c = 1; c <= ncol; c++) {
+      if (String(fmt1(ws.Cells(r, c).Value2)).trim() !== '') { has = true; break; }
+    }
+    if (has) return r;
+  }
+  return 1;
+}
+
 function lastRow(ws) {
   try {
     var r = ws.UsedRange.Row + ws.UsedRange.Rows.Count - 1;
@@ -325,7 +338,7 @@ function appendEntries(rows) {
     return out;
   };
 
-  var nextNew = Object.keys(idx).length ? (lastRow(ws) + 1) : 2;
+  var nextNew = Object.keys(idx).length ? (lastDataRow(ws) + 1) : 2;
   var added = 0, updated = 0;
   rows.forEach(function (row) {
     if (!row || !row.id) return;
@@ -392,11 +405,12 @@ function clearAllData() {
     var n = lastRow(ws);
     if (n >= 2) {
       try {
-        var rng = ws.Range(ws.Cells(2, 1), ws.Cells(Math.max(n, 200), Math.max(ws.UsedRange.Columns.Count, 20)));
-        rng.ClearContents();
-        rng.Interior.ColorIndex = -4142;      // 清除底色（含旧的手工色块）
+        var rng = ws.Range(ws.Cells(2, 1), ws.Cells(1000, Math.max(ws.UsedRange.Columns.Count, 25)));
+        rng.Clear({ clearContents: true, clearFormats: true });   // 内容+格式+验证+条件格式全清
         cleared++;
-      } catch (e) {}
+      } catch (e) {
+        try { ws.Range(ws.Cells(2, 1), ws.Cells(1000, 25)).ClearContents(); cleared++; } catch (e2) {}
+      }
     }
   });
   return cleared;
@@ -645,8 +659,26 @@ function syncEntries() {
     next = d.next; guard++;
   } while (next && guard < 20);
   var rows = all.map(ledgerRowOf);
+
+  // 核对：金数据里已删除的答卷 → 从总表移除
+  var ws = sheet('总表');
+  var m = headerMap(ws), cId = m['entry_id'];
+  var wanted = {};
+  rows.forEach(function (r) { if (r.id) wanted[r.id] = true; });
+  var removed = 0;
+  if (ws && cId) {
+    var toDel = [];
+    for (var r0 = 2; r0 <= lastRow(ws); r0++) {
+      var id0 = String(fmt1(ws.Cells(r0, cId).Value2)).trim();
+      if (id0 && !wanted[id0]) toDel.push(r0);
+    }
+    toDel.reverse().forEach(function (rr) {
+      try { ws.Rows(rr).Delete(); removed++; } catch (e) {}
+    });
+  }
+
   var msg = appendEntries(rows);
-  return '同步 ' + rows.length + ' 条：' + msg;
+  return '同步 ' + rows.length + ' 条：' + msg + (removed ? '；移除已删除 ' + removed : '');
 }
 
 function logRun(text) {
