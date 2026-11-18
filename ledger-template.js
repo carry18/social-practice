@@ -35,7 +35,7 @@ var CONFIG = {
 /* ======================================= */
 
 /* 手动开关：改成 true 跑一次 = 强制清空重建（跑完记得改回 false） */
-var FORCE_RESET = false;
+var FORCE_RESET = true;
 
 var argv = (typeof Context !== 'undefined' && Context && Context.argv) || {};
 var action = argv.action || 'ping';
@@ -704,32 +704,8 @@ function logRun(text) {
 function main() {
   var out = [];
   try {
-    var stale = false;
-    var wsT = sheet('总表');
-    if (wsT && headerOk()) {                  // 找出「有内容但没有 entry_id」的历史脏行
-      var mT = headerMap(wsT), cT = mT['entry_id'];
-      var rowsT = 0, seen = {}, dup = false;
-      for (var rT = 2; rT <= lastRow(wsT); rT++) {
-        var idT = String(fmt1(wsT.Cells(rT, cT).Value2)).trim();
-        var anyT = false;
-        for (var cT2 = 2; cT2 <= cT; cT2++) {
-          if (String(fmt1(wsT.Cells(rT, cT2).Value2)).trim() !== '') { anyT = true; break; }
-        }
-        if (!anyT) continue;
-        rowsT++;
-        if (!idT) { stale = true; break; }      // 有内容没 entry_id → 旧结构残留
-        if (seen[idT]) { dup = true; break; }   // 同一人出现多次 → 重复行
-        seen[idT] = 1;
-      }
-      if (!stale && dup) stale = true;
-    }
-    if (FORCE_RESET || !headerOk() || stale) {
-      out.push(resetAll(FORCE_RESET));        // FORCE_RESET=true 走"删表重建"，否则只清数据行
-    } else {
-      if (CONFIG.teams && CONFIG.teams.length) out.push(ensureSheets(CONFIG.teams));
-      out.push(syncEntries());
-      out.push(reflow(true));
-    }
+    // 每次 main 都先做一次"清空重建"（FORCE_RESET=true 时直接删表重建，保证列结构 100% 对齐）
+    out.push(resetAll(FORCE_RESET));
   } catch (e) {
     out.push('失败：' + (e && e.message ? e.message : e));
   }
