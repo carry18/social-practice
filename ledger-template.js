@@ -853,6 +853,39 @@ function verify() {
          (issues.length ? '，问题：' + issues.join('；') : '（总表 ' + rows + ' 行，分表 ' + teamRows + '，调剂池 ' + poolCount + '）');
 }
 
+/* ---------------- debug：只读返回台账状态 ---------------- */
+function debug() {
+  var out = { sheets: [] };
+  for (var i = 1; i <= Application.Sheets.Count; i++) out.sheets.push(Application.Sheets.Item(i).Name);
+
+  var ws = sheet('总表');
+  if (ws) {
+    var m = headerMap(ws);
+    out.totalHeader = Object.keys(m);
+    out.totalRows = lastRow(ws) - 1;
+    out.assign = {};
+    for (var r = 2; r <= lastRow(ws); r++) {
+      var a = String(fmt1(ws.Cells(r, m['分配状态']).Value2)).trim();
+      if (a) out.assign[a] = (out.assign[a] || 0) + 1;
+    }
+    out.firstAssign = String(fmt1(ws.Cells(2, m['分配状态']).Value2)).trim();
+    out.firstId = String(fmt1(ws.Cells(2, m['entry_id']).Value2)).trim();
+  }
+  var tz = sheet('支队对照');
+  if (tz) {
+    var tzm = headerMap(tz);
+    out.teams = [];
+    for (var t = 2; t <= lastRow(tz); t++) {
+      var nm = String(fmt1(tz.Cells(t, tzm['支队名（=分表名）']).Value2)).trim();
+      if (nm) {
+        var ts = sheet(nm);
+        out.teams.push({ name: nm, exists: !!ts, rows: ts ? lastRow(ts) - 1 : -1, header: ts ? Object.keys(headerMap(ts)).slice(0, 5) : [] });
+      }
+    }
+  }
+  return JSON.stringify(out);
+}
+
 /* ---------------- 入口 ---------------- */
 
 if (action === 'ping') return 'pong';
@@ -866,4 +899,5 @@ if (action === 'reflow') return reflow();
 if (action === 'main') return main();
 if (action === 'reset') return resetAll();
 if (action === 'verify') return verify();
+if (action === 'debug') return debug();
 return '未知 action: ' + action;
