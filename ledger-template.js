@@ -587,18 +587,43 @@ function reflow(force) {
   }
 
   // ④ 重建分表与调剂池
+  // 先读队名列表（支队对照 B 列），用于把 A 列值映射到分表名
+  var teamNames = [];
+  var tz0 = sheet('支队对照');
+  if (tz0) {
+    var tzm0 = headerMap(tz0);
+    for (var t0 = 2; t0 <= lastRow(tz0); t0++) {
+      var nm0 = String(fmt1(tz0.Cells(t0, tzm0['支队名（=分表名）']).Value2)).trim();
+      if (nm0) teamNames.push(nm0);
+    }
+  }
+
   var all = readRows(ws);
   var byTeam = {}, pool = [];
   all.forEach(function (o) {
     var a = String(fmt1(o.v[cAssign - 1])).trim();
     var id = String(fmt1(o.v[cId - 1])).trim();
     if (!id) return;
-    if (a === '淘汰') pool.push(o);
-    else if (a) (byTeam[a] = byTeam[a] || []).push(o);
+    if (a === '淘汰') { pool.push(o); return; }
+    if (!a) return;
+    var key = a;
+    if (teamNames.indexOf(key) < 0) {
+      // 兼容：A 列存序号或部分文本 → 匹配到完整队名
+      for (var t2 = 0; t2 < teamNames.length; t2++) {
+        var lbl = teamNames[t2];
+        if (lbl === a || String(lbl).indexOf(a) === 0 || String(a).indexOf(String(lbl).split(' ')[0]) === 0) { key = lbl; break; }
+      }
+    }
+    (byTeam[key] = byTeam[key] || []).push(o);
   });
 
   var rebuilt = 0;
-  var teamNames = [];
+  var dbg = [];
+  Object.keys(byTeam).forEach(function (k) { dbg.push(String(k).slice(0, 14) + ':' + byTeam[k].length); });
+  if (dbg.length) console.log('分表分布: ' + dbg.join(' '));
+  var dbg = [];
+  Object.keys(byTeam).forEach(function (k) { dbg.push(String(k).slice(0, 14) + ':' + byTeam[k].length); });
+  if (dbg.length) console.log('分表分布: ' + dbg.join(' '));
   var tz = sheet('支队对照');
   if (tz) {
     var tzm = headerMap(tz);
