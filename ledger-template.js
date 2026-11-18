@@ -621,21 +621,21 @@ function reflow(force) {
   var dbg = [];
   Object.keys(byTeam).forEach(function (k) { dbg.push(String(k).slice(0, 14) + ':' + byTeam[k].length); });
   if (dbg.length) console.log('分表分布: ' + dbg.join(' '));
-  var dbg = [];
-  Object.keys(byTeam).forEach(function (k) { dbg.push(String(k).slice(0, 14) + ':' + byTeam[k].length); });
-  if (dbg.length) console.log('分表分布: ' + dbg.join(' '));
-  var tz = sheet('支队对照');
-  if (tz) {
-    var tzm = headerMap(tz);
-    for (var t = 2; t <= lastRow(tz); t++) {
-      var nm = String(fmt1(tz.Cells(t, tzm['支队名（=分表名）']).Value2)).trim();
-      if (nm) teamNames.push(nm);
-    }
-  }
 
   teamNames.forEach(function (nm) {
     var ts = sheet(nm);
-    if (!ts) return;
+    if (!ts) {
+      // 兜底：sheet 名可能被截断/有空格差异 → 按「序号. 」前缀匹配
+      var pref = String(nm).match(/^(\d+)\./);
+      if (pref) {
+        for (var si = 1; si <= Application.Sheets.Count; si++) {
+          var sn = Application.Sheets.Item(si).Name;
+          if (sn === nm) { ts = sheet(sn); break; }
+          if (String(sn).indexOf(pref[1] + '.') === 0) { ts = sheet(sn); break; }
+        }
+      }
+    }
+    if (!ts) { console.log('分表不存在: ' + nm); return; }
     var tm = headerMap(ts);
     var list = byTeam[nm] || [];
     var desired = list.map(function (o) {
@@ -744,7 +744,7 @@ function logRun(text) {
     ws.Range('A1:B1').Value2 = [['时间', '结果']];
     ws.Rows(1).Font.Bold = true;
   }
-  var r = lastRow(ws) + 1;
+  var r = lastDataRow(ws) + 1;   // 追加到真正最后一条之后，不覆盖
   var d = new Date();
   var p = function (n) { return (n < 10 ? '0' : '') + n; };
   var stamp = d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' +
@@ -823,7 +823,18 @@ function verify() {
   var teamRows = 0;
   teamNames.forEach(function (nm) {
     var ts = sheet(nm);
-    if (!ts) return;
+    if (!ts) {
+      // 兜底：sheet 名可能被截断/有空格差异 → 按「序号. 」前缀匹配
+      var pref = String(nm).match(/^(\d+)\./);
+      if (pref) {
+        for (var si = 1; si <= Application.Sheets.Count; si++) {
+          var sn = Application.Sheets.Item(si).Name;
+          if (sn === nm) { ts = sheet(sn); break; }
+          if (String(sn).indexOf(pref[1] + '.') === 0) { ts = sheet(sn); break; }
+        }
+      }
+    }
+    if (!ts) { console.log('分表不存在: ' + nm); return; }
     for (var r2 = 2; r2 <= lastRow(ts); r2++) {
       var any3 = false;
       for (var c3 = 1; c3 <= 6; c3++) {
