@@ -586,7 +586,7 @@ function reflow(force) {
       var oid = String(fmt1(o.v[m['entry_id'] - 1])).trim();
       return [statusOf[oid] || ''].concat(pickByHeader(o.v, m, tm, 1));
     });
-    if (sameMatrix(ts, tm['entry_id'], desired)) { rebuilt++; return; }   // 没变化就不动
+    if (sameMatrix(ts, tm['entry_id'], desired)) { rebuilt++; return; }   // 没变化就不动（多余行也会被下面 ClearContents 清掉）
     var tn = lastRow(ts);
     if (tn >= 2) ts.Range(ts.Cells(2, 1), ts.Cells(tn, tm['entry_id'])).ClearContents();
     desired.forEach(function (rowVals, i) {
@@ -738,6 +738,88 @@ function main() {
   return msg;
 }
 
+/* ---------------- verify：只读体检，不写任何数据 ---------------- */
+function verify() {
+  var issues = [], ok = 0;
+  var ws = sheet('总表');
+  if (!ws) return '❌ 缺少「总表」';
+  var m = headerMap(ws);
+  var cId = m['entry_id'], cAssign = m['分配状态'];
+  var seen = {}, rows = 0, dup = 0, noId = 0, badAssign = 0, assignCount = {};
+
+  var teamNames = [];
+  var tz = sheet('支队对照');
+  if (tz) {
+    var tzm = headerMap(tz);
+    for (var t = 2; t <= lastRow(tz); t++) {
+      var nm = String(fmt1(tz.Cells(t, tzm['支队名（=分表名）']).Value2)).trim();
+      if (nm) teamNames.push(nm);
+    }
+  }
+  var valid = {};
+  teamNames.forEach(function (n2) { valid[n2] = true; });
+  valid['淘汰'] = true; valid[''] = true;
+
+  for (var r = 2; r <= lastRow(ws); r++) {
+    var id = String(fmt1(ws.Cells(r, cId).Value2)).trim();
+    var a = String(fmt1(ws.Cells(r, cAssign).Value2)).trim();
+    var any = false;
+    for (var c = 1; c <= ws.UsedRange.Columns.Count; c++) {
+      if (String(fmt1(ws.Cells(r, c).Value2)).trim() !== '') { any = true; break; }
+    }
+    if (!any) continue;
+    rows++;
+    if (!id) noId++;
+    else if (seen[id]) dup++; else seen[id] = 1;
+    if (a && !valid[a]) badAssign++;
+    if (a) assignCount[a] = (assignCount[a] || 0) + 1;
+  }
+
+  // 分表人数与总表一致（淘汰的应去淘汰池）
+  var poolCount = 0;
+  var ps = sheet('淘汰池');
+  if (ps) {
+    for (var p2 = 2; p2 <= lastRow(ps); p2++) {
+      var any2 = false;
+      for (var c2 = 1; c2 <= 6; c2++) {
+        if (String(fmt1(ps.Cells(p2, c2).Value2)).trim() !== '') { any2 = true; break; }
+      }
+      if (any2) poolCount++;
+    }
+  }
+  var teamRows = 0;
+  teamNames.forEach(function (nm) {
+    var ts = sheet(nm);
+    if (!ts) return;
+    for (var r2 = 2; r2 <= lastRow(ts); r2++) {
+      var any3 = false;
+      for (var c3 = 1; c3 <= 6; c3++) {
+        if (String(fmt1(ts.Cells(r2, c3).Value2)).trim() !== '') { any3 = true; break; }
+      }
+      if (any3) teamRows++;
+    }
+  });
+
+  var expectedTeam = rows - (assignCount['淘汰'] || 0);
+  var expectedPool = assignCount['淘汰'] || 0;
+
+  if (noId) issues.push('有 ' + noId + ' 行缺 entry_id');
+  else ok++;
+  if (dup) issues.push('entry_id 重复 ' + dup + ' 处');
+  else ok++;
+  if (badAssign) issues.push('分配状态非法 ' + badAssign + ' 行');
+  else ok++;
+  if (teamRows !== expectedTeam) issues.push('分表人数 ' + teamRows + ' ≠ 总表非淘汰 ' + expectedTeam);
+  else ok++;
+  if (poolCount !== expectedPool) issues.push('淘汰池 ' + poolCount + ' ≠ 总表淘汰 ' + expectedPool);
+  else ok++;
+  if (!m['录取状态'] || !m['entry_id']) issues.push('表头缺列（录取状态/entry_id）');
+  else ok++;
+
+  return (issues.length ? '❌ ' : '✅ 体检通过 ') + ok + ' 项正常' +
+         (issues.length ? '，问题：' + issues.join('；') : '（总表 ' + rows + ' 行，分表 ' + teamRows + '，淘汰池 ' + poolCount + '）');
+}
+
 /* ---------------- 入口 ---------------- */
 
 if (action === 'ping') return 'pong';
@@ -750,4 +832,5 @@ if (action === 'appendEntries') return appendEntries(argv.rows || []);
 if (action === 'reflow') return reflow();
 if (action === 'main') return main();
 if (action === 'reset') return resetAll();
+if (action === 'verify') return verify();
 return '未知 action: ' + action;
