@@ -270,6 +270,36 @@ function colorCell(ws, r, c, num) {
   ws.Cells(r, c).Font.Color = RGB(TEXT_DARK[0], TEXT_DARK[1], TEXT_DARK[2]);
 }
 
+/* ---------------- 单独刷新下拉（不重建表，很快） ---------------- */
+function refreshValidations() {
+  var teams = CONFIG.teams || [];
+  var n = teams.length;
+  var cnt = 0;
+  var labels = teams.map(function (t) { return String(t.label); });
+  var assignOpts = labels.concat(['淘汰']);
+
+  var ws = sheet('总表');
+  if (ws && n) { if (addLocalList(ws, 'A2:A1000', assignOpts, 26)) cnt++; }
+
+  var ps = sheet('调剂池');
+  if (ps && n) { if (addLocalList(ps, 'B2:B1000', labels, 26)) cnt++; }
+
+  teams.forEach(function (t) {
+    var ts = sheet(String(t.label).substring(0, 31)) || sheet(String(t.label));
+    if (!ts) {
+      var pref = String(t.label).match(/^(\d+)\./);
+      if (pref) {
+        for (var i = 1; i <= Application.Sheets.Count; i++) {
+          var nm = Application.Sheets.Item(i).Name;
+          if (String(nm).indexOf(pref[1] + '.') === 0) { ts = sheet(nm); break; }
+        }
+      }
+    }
+    if (ts) { if (addLocalList(ts, 'A2:A1000', ['录取', '淘汰'], 26)) cnt++; }
+  });
+  return cnt;
+}
+
 /* ---------------- ensure：建表 ---------------- */
 
 function ensureSheets(teams) {
@@ -987,6 +1017,7 @@ function main() {
     } else {
       out.push(resetAll(FORCE_RESET, rows));
     }
+    try { out.push('下拉刷新 ' + refreshValidations() + ' 张'); } catch (eV) {}
     // 核对：分表总人数应与总表非淘汰人数一致；不一致就补一次归位
     try {
       var chk = reflowCheck();
