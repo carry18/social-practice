@@ -535,7 +535,8 @@ function clearAllData() {
     var n = lastDataRow(ws);
     if (n >= 2) {
       try {
-        var rng = ws.Range(ws.Cells(2, 1), ws.Cells(n, Math.max(ws.UsedRange.Columns.Count, 20)));
+        var maxCol = Math.min(Math.max(ws.UsedRange.Columns.Count, 20), 24);   // 保留 Z 列（下拉选项）
+        var rng = ws.Range(ws.Cells(2, 1), ws.Cells(n, maxCol));
         rng.ClearContents();
         cleared++;
       } catch (e) {
