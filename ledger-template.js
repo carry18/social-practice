@@ -35,7 +35,7 @@ var CONFIG = {
 /* ======================================= */
 
 /* 手动开关：改成 true 跑一次 = 强制清空重建（跑完记得改回 false） */
-var FORCE_RESET = true;
+var FORCE_RESET = false;
 
 var argv = (typeof Context !== 'undefined' && Context && Context.argv) || {};
 var action = argv.action || 'ping';
@@ -513,7 +513,8 @@ function resetAll(hard, preRows) {
       if (k.assign) { ws2.Cells(r2, as2).Value2 = k.assign; }
     }
   }
-  var rf = reflow(true);
+  var rf;
+  try { rf = reflow(true); } catch (eR) { rf = 'reflow失败：' + (eR && eR.message ? eR.message : eR); }
   paintAssignCol();
   return 'reset: 清空 ' + cleared + ' 张表 | ' + msg + ' | ' + sync + ' | ' + rf;
 }
@@ -769,6 +770,34 @@ function logRun(text) {
          定时任务 B：每小时每分（即每分钟）跑 main()（也含归位，因为 reflow 内部有 20s 防抖）
    说明：main() 里 reflow 是同步执行的，所以不需要单独的"每分钟归位"任务；
          金数据 API 限额 100 次/小时，main() 每分钟跑 = 60 次/小时，够用且安全。 */
+function reflowCheck() {
+  var ws = sheet('总表');
+  if (!ws) return '无总表';
+  var m = headerMap(ws), cId = m['entry_id'], cA = m['分配状态'];
+  var total = 0, pool = 0;
+  for (var r = 2; r <= lastRow(ws); r++) {
+    var id = String(fmt1(ws.Cells(r, cId).Value2)).trim();
+    if (!id) continue;
+    total++;
+    if (String(fmt1(ws.Cells(r, cA).Value2)).trim() === '淘汰') pool++;
+  }
+  var team = 0, names = [];
+  var tz = sheet('支队对照');
+  if (tz) {
+    var tzm = headerMap(tz);
+    for (var t = 2; t <= lastRow(tz); t++) {
+      var nm = String(fmt1(tz.Cells(t, tzm['支队名（=分表名）']).Value2)).trim();
+      if (nm) names.push(nm);
+    }
+  }
+  names.forEach(function (nm) {
+    var ts = sheet(nm);
+    if (ts) team += (lastRow(ts) - 1);
+  });
+  var expect = total - pool;
+  return team === expect ? ('一致 分表' + team + '=总表' + expect) : ('不一致 分表' + team + '≠总表' + expect);
+}
+
 function main() {
   // 防抖：60 秒内重复执行直接跳过，避免把金数据 100 次/小时额度打爆
   try {
@@ -797,6 +826,15 @@ function main() {
     } else {
       out.push(resetAll(FORCE_RESET, rows));
     }
+    // 核对：分表总人数应与总表非淘汰人数一致；不一致就补一次归位
+    try {
+      var chk = reflowCheck();
+      out.push('核对: ' + chk);
+      if (chk.indexOf('不一致') >= 0) {
+        out.push('补归位: ' + reflow(true));
+        out.push('复核: ' + reflowCheck());
+      }
+    } catch (eChk) { out.push('核对失败:' + (eChk && eChk.message)); }
     out.push('共 ' + (rows || []).length + ' 条答卷');
   } catch (e) {
     out.push('失败：' + (e && e.message ? e.message : e));
