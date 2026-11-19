@@ -572,7 +572,8 @@ function resetAll(hard, preRows) {
   } else {
     cleared = clearAllData();
   }
-  var msg = ensureSheets(CONFIG.teams || []);
+  var needEnsure = hard || !headerOk();
+  var msg = needEnsure ? ensureSheets(CONFIG.teams || []) : 'sheets kept';
   var sync = preRows ? applyRows(preRows) : syncEntries();
   var ws2 = sheet('总表');
   if (ws2 && Object.keys(keep).length) {
@@ -899,6 +900,7 @@ function reflowCheck() {
 }
 
 function main() {
+  var T0 = new Date().getTime();
   // 防抖：60 秒内重复执行直接跳过，避免把金数据 100 次/小时额度打爆
   try {
     var lb = ensureSheet('同步日志');
@@ -936,6 +938,7 @@ function main() {
       }
     } catch (eChk) { out.push('核对失败:' + (eChk && eChk.message)); }
     out.push('共 ' + (rows || []).length + ' 条答卷');
+    out.push('耗时 ' + ((new Date().getTime() - T0) / 1000).toFixed(1) + 's');
   } catch (e) {
     out.push('失败：' + (e && e.message ? e.message : e));
   }
