@@ -624,33 +624,47 @@ function reflow(force, alwaysWrite) {
   Object.keys(byTeam).forEach(function (k) { dbg.push(String(k).slice(0, 14) + ':' + byTeam[k].length); });
   var dbgTxt = '分表分布: ' + (dbg.length ? dbg.join(' ') : '（无）');
 
-  teamNames.forEach(function (nm) {
-    var ts = sheet(nm);
-    if (!ts) {
-      // 兜底：sheet 名可能被截断/有空格差异 → 按「序号. 」前缀匹配
-      var pref = String(nm).match(/^(\d+)\./);
-      if (pref) {
-        for (var si = 1; si <= Application.Sheets.Count; si++) {
-          var sn = Application.Sheets.Item(si).Name;
-          if (sn === nm) { ts = sheet(sn); break; }
-          if (String(sn).indexOf(pref[1] + '.') === 0) { ts = sheet(sn); break; }
-        }
-      }
+  /* 队名 → 实际 sheet 名（容忍空格/截断/序号前缀差异） */
+  function resolveTeamSheet(key) {
+    var k = String(key).replace(/\s+/g, '');
+    for (var i = 0; i < teamNames.length; i++) {
+      var n = String(teamNames[i]).replace(/\s+/g, '');
+      if (n === k) return teamNames[i];
+      var p = n.match(/^(\d+)\./), q = k.match(/^(\d+)\./);
+      if (p && q && p[1] === q[1]) return teamNames[i];
     }
-    if (!ts) { console.log('分表不存在: ' + nm); return; }
+    return null;
+  }
+
+  var wroteKeys = {};
+  var writeFail = 0, lastErr = '';
+  Object.keys(byTeam).forEach(function (key) {
+    var nm = resolveTeamSheet(key);
+    if (!nm) { console.log('未匹配到分表: ' + key); return; }
+    wroteKeys[nm] = 1;
+    var ts = sheet(nm);
+    if (!ts) { return; }
     var tm = headerMap(ts);
-    var list = byTeam[nm] || [];
-    var desired = list.map(function (o) {
+    var desired = byTeam[key].map(function (o) {
       var oid = String(fmt1(o.v[m['entry_id'] - 1])).trim();
       return [statusOf[oid] || ''].concat(pickByHeader(o.v, m, tm, 1));
     });
-    if (!alwaysWrite && sameMatrix(ts, tm['entry_id'], desired)) { rebuilt++; return; }   // 普通调用且无变化才跳过
     var tn = lastRow(ts);
-    if (tn >= 2) ts.Range(ts.Cells(2, 1), ts.Cells(tn, tm['entry_id'])).ClearContents();
+    if (tn >= 2) { try { ts.Range(ts.Cells(2, 1), ts.Cells(tn, Math.max(tm['entry_id'] || 1, 17))).ClearContents(); } catch (eC) {} }
     desired.forEach(function (rowVals, i) {
-      ts.Range(ts.Cells(i + 2, 1), ts.Cells(i + 2, rowVals.length)).Value2 = [rowVals];
+      try { ts.Range(ts.Cells(i + 2, 1), ts.Cells(i + 2, rowVals.length)).Value2 = [rowVals]; }
+      catch (eW) { writeFail++; lastErr = (eW && eW.message) ? eW.message : String(eW); }
     });
     rebuilt++;
+  });
+
+  // 没有人的分表：清空数据行
+  teamNames.forEach(function (nm) {
+    if (wroteKeys[nm]) return;
+    var ts = sheet(nm);
+    if (!ts) return;
+    var tn = lastRow(ts);
+    if (tn >= 2) { try { ts.Range(ts.Cells(2, 1), ts.Cells(tn, 17)).ClearContents(); } catch (eC2) {} }
   });
 
   if (ps) {
@@ -665,7 +679,14 @@ function reflow(force, alwaysWrite) {
   }
 
   paintAssignCol();
-  return 'reflow: 淘汰=' + moved + ', 捞起=' + picked + ', 分表重建=' + rebuilt + ', 调剂池=' + pool.length + ' | ' + dbgTxt;
+  var rowsTxt = [];
+  teamNames.forEach(function (nm) {
+    var ts = sheet(nm);
+    if (ts) rowsTxt.push(String(nm).slice(0, 4) + (lastRow(ts) - 1));
+  });
+  return 'reflow: 淘汰=' + moved + ', 捞起=' + picked + ', 分表=' + rowsTxt.join(',') +
+         ', 调剂池=' + pool.length + ' | ' + dbgTxt +
+         (writeFail ? (' | 写入失败' + writeFail + '次: ' + lastErr) : '');
 }
 
 /* ---------------- 金数据拉取（金山定时任务调用） ---------------- */
