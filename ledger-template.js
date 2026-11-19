@@ -507,14 +507,14 @@ function clearAllData() {
     if (!ws) return;
     // 支队分表（第一列表头是「录取状态」）不在这里清，交给 reflow 逐表重写
     try { if (String(fmt1(ws.Cells(1, 1).Value2)).trim() === '录取状态') return; } catch (eS) {}
-    var n = lastRow(ws);
+    var n = lastDataRow(ws);
     if (n >= 2) {
       try {
-        var rng = ws.Range(ws.Cells(2, 1), ws.Cells(1000, Math.max(ws.UsedRange.Columns.Count, 25)));
-        rng.Clear({ clearContents: true, clearFormats: true });   // 内容+格式+验证+条件格式全清
+        var rng = ws.Range(ws.Cells(2, 1), ws.Cells(n, Math.max(ws.UsedRange.Columns.Count, 20)));
+        rng.ClearContents();
         cleared++;
       } catch (e) {
-        try { ws.Range(ws.Cells(2, 1), ws.Cells(1000, 25)).ClearContents(); cleared++; } catch (e2) {}
+        try { ws.Range(ws.Cells(2, 1), ws.Cells(n, 20)).ClearContents(); cleared++; } catch (e2) {}
       }
     }
   });
@@ -654,13 +654,20 @@ function reflow(force, alwaysWrite) {
 
   // ③ 写回总表（分配状态 + 录取状态）
   var cStatus = m['录取状态'];
-  for (var r2 = 2; r2 <= n; r2++) {
-    var id2 = String(fmt1(ws.Cells(r2, cId).Value2)).trim();
-    if (!id2) continue;
-    if (assign[id2] !== undefined) {
-      ws.Cells(r2, cAssign).Value2 = assign[id2];
+  if (n >= 2) {
+    var ids = ws.Range(ws.Cells(2, cId), ws.Cells(n, cId)).Value2 || [];
+    var aCol = [], sCol = [], changed = false;
+    for (var r2 = 0; r2 < ids.length; r2++) {
+      var id2 = String(fmt1(ids[r2] ? (ids[r2][0] !== undefined ? ids[r2][0] : ids[r2]) : '')).trim();
+      var av = (id2 && assign[id2] !== undefined) ? assign[id2] : '';
+      var sv = (id2 && statusOf[id2] !== undefined) ? statusOf[id2] : '';
+      aCol.push([av]); sCol.push([sv]);
+      if (av || sv) changed = true;
     }
-    if (cStatus && statusOf[id2] !== undefined) ws.Cells(r2, cStatus).Value2 = statusOf[id2];
+    if (changed) {
+      try { ws.Range(ws.Cells(2, cAssign), ws.Cells(1 + ids.length, cAssign)).Value2 = aCol; } catch (eA1) {}
+      if (cStatus) { try { ws.Range(ws.Cells(2, cStatus), ws.Cells(1 + ids.length, cStatus)).Value2 = sCol; } catch (eA2) {} }
+    }
   }
 
   // ④ 重建分表与调剂池
@@ -968,12 +975,15 @@ function verify() {
   teamNames.forEach(function (n2) { valid[n2] = true; });
   valid['淘汰'] = true; valid[''] = true;
 
-  for (var r = 2; r <= lastRow(ws); r++) {
-    var id = String(fmt1(ws.Cells(r, cId).Value2)).trim();
-    var a = String(fmt1(ws.Cells(r, cAssign).Value2)).trim();
+  var nAll = lastRow(ws);
+  var block = nAll >= 2 ? (ws.Range(ws.Cells(2, 1), ws.Cells(nAll, Math.max(cId, 1))).Value2 || []) : [];
+  for (var r = 0; r < block.length; r++) {
+    var line = block[r] || [];
+    var id = String(fmt1(line[cId - 1])).trim();
+    var a = String(fmt1(line[cAssign - 1])).trim();
     var any = false;
-    for (var c = 1; c <= ws.UsedRange.Columns.Count; c++) {
-      if (String(fmt1(ws.Cells(r, c).Value2)).trim() !== '') { any = true; break; }
+    for (var c = 0; c < line.length; c++) {
+      if (String(fmt1(line[c])).trim() !== '') { any = true; break; }
     }
     if (!any) continue;
     rows++;
@@ -987,12 +997,14 @@ function verify() {
   var poolCount = 0;
   var ps = sheet('调剂池');
   if (ps) {
-    for (var p2 = 2; p2 <= lastRow(ps); p2++) {
-      var any2 = false;
-      for (var c2 = 1; c2 <= 6; c2++) {
-        if (String(fmt1(ps.Cells(p2, c2).Value2)).trim() !== '') { any2 = true; break; }
-      }
-      if (any2) poolCount++;
+    var pn2 = lastRow(ps);
+    if (pn2 >= 2) {
+      var pblock = ps.Range(ps.Cells(2, 1), ps.Cells(pn2, 3)).Value2 || [];
+      pblock.forEach(function (ln) {
+        var has = false;
+        for (var q = 0; q < (ln || []).length; q++) if (String(fmt1(ln[q])).trim() !== '') { has = true; break; }
+        if (has) poolCount++;
+      });
     }
   }
   var teamRows = 0;
@@ -1009,13 +1021,15 @@ function verify() {
         }
       }
     }
-    if (!ts) { console.log('分表不存在: ' + nm); return; }
-    for (var r2 = 2; r2 <= lastRow(ts); r2++) {
-      var any3 = false;
-      for (var c3 = 1; c3 <= 6; c3++) {
-        if (String(fmt1(ts.Cells(r2, c3).Value2)).trim() !== '') { any3 = true; break; }
-      }
-      if (any3) teamRows++;
+    if (!ts) return;
+    var trows = lastRow(ts);
+    if (trows >= 2) {
+      var tblock = ts.Range(ts.Cells(2, 1), ts.Cells(trows, 3)).Value2 || [];
+      tblock.forEach(function (ln) {
+        var has = false;
+        for (var q2 = 0; q2 < (ln || []).length; q2++) if (String(fmt1(ln[q2])).trim() !== '') { has = true; break; }
+        if (has) teamRows++;
+      });
     }
   });
 
