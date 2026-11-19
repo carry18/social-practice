@@ -1071,6 +1071,22 @@ function debug() {
   return JSON.stringify(out);
 }
 
+/* ---------------- perms：只读检查工作表保护/可见性/筛选 ---------------- */
+function perms() {
+  var out = [];
+  for (var i = 1; i <= Application.Sheets.Count; i++) {
+    var ws = Application.Sheets.Item(i);
+    var rec = { name: ws.Name };
+    try { rec.visible = ws.Visible; } catch (e1) {}
+    try { rec.protectContents = ws.ProtectContents; } catch (e2) {}
+    try { rec.protectDrawing = ws.ProtectDrawingObjects; } catch (e3) {}
+    try { rec.filterMode = ws.FilterMode; } catch (e4) {}
+    try { rec.autoFilter = ws.AutoFilterMode; } catch (e5) {}
+    out.push(rec);
+  }
+  return JSON.stringify(out);
+}
+
 /* ---------------- status：只读台账状态（不写数据） ---------------- */
 function status() {
   var out = { sheets: [], teams: [], log: [] };
