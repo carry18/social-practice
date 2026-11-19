@@ -78,7 +78,8 @@ function lastRow(ws) {
 }
 
 function headerMap(ws) {
-  var map = {}, cols = ws.UsedRange.Columns.Count;
+  var cols = ws.UsedRange.Columns.Count;
+  var map = {};
   for (var c = 1; c <= cols; c++) {
     var v = String(fmt1(ws.Cells(1, c).Value2)).trim();
     if (v && map[v] === undefined) map[v] = c;
@@ -124,7 +125,7 @@ function teamIndex(teams) {
 function readRows(ws) {
   var n = lastRow(ws);
   if (n < 2) return [];
-  var ncol = ws.UsedRange.Columns.Count;
+  var ncol = Math.max(ws.UsedRange.Columns.Count, headerMap(ws)['entry_id'] || 0);
   var vals = ws.Range(ws.Cells(2, 1), ws.Cells(n, ncol)).Value2;
   if (!vals || !vals.length) return [];
   var out = [];
@@ -620,7 +621,7 @@ function reflow(force) {
   var rebuilt = 0;
   var dbg = [];
   Object.keys(byTeam).forEach(function (k) { dbg.push(String(k).slice(0, 14) + ':' + byTeam[k].length); });
-  if (dbg.length) console.log('分表分布: ' + dbg.join(' '));
+  var dbgTxt = '分表分布: ' + (dbg.length ? dbg.join(' ') : '（无）');
 
   teamNames.forEach(function (nm) {
     var ts = sheet(nm);
@@ -663,7 +664,7 @@ function reflow(force) {
   }
 
   paintAssignCol();
-  return 'reflow: 淘汰=' + moved + ', 捞起=' + picked + ', 分表重建=' + rebuilt + ', 调剂池=' + pool.length;
+  return 'reflow: 淘汰=' + moved + ', 捞起=' + picked + ', 分表重建=' + rebuilt + ', 调剂池=' + pool.length + ' | ' + dbgTxt;
 }
 
 /* ---------------- 金数据拉取（金山定时任务调用） ---------------- */
