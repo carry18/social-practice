@@ -505,6 +505,8 @@ function clearAllData() {
     if (skip.indexOf(nm) >= 0) return;
     var ws = sheet(nm);
     if (!ws) return;
+    // 支队分表（第一列表头是「录取状态」）不在这里清，交给 reflow 逐表重写
+    try { if (String(fmt1(ws.Cells(1, 1).Value2)).trim() === '录取状态') return; } catch (eS) {}
     var n = lastRow(ws);
     if (n >= 2) {
       try {
@@ -862,7 +864,7 @@ function logRun(text) {
   var p = function (n) { return (n < 10 ? '0' : '') + n; };
   var stamp = d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' +
               p(d.getHours()) + ':' + p(d.getMinutes());
-  ws.Range(ws.Cells(r, 1), ws.Cells(r, 2)).Value2 = [[stamp, String(text).slice(0, 400)]];
+  ws.Range(ws.Cells(r, 1), ws.Cells(r, 2)).Value2 = [[stamp, String(text).slice(0, 1200)]];
   if (r > 500) { try { ws.Range('A2:B' + (r - 400)).ClearContents(); } catch (e) {} }
 }
 
@@ -932,10 +934,6 @@ function main() {
     try {
       var chk = reflowCheck();
       out.push('核对: ' + chk);
-      if (chk.indexOf('不一致') >= 0) {
-        out.push('补归位: ' + reflow(true, true));
-        out.push('复核: ' + reflowCheck());
-      }
     } catch (eChk) { out.push('核对失败:' + (eChk && eChk.message)); }
     out.push('共 ' + (rows || []).length + ' 条答卷');
     out.push('耗时 ' + ((new Date().getTime() - T0) / 1000).toFixed(1) + 's');
