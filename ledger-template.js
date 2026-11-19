@@ -1146,6 +1146,17 @@ function perms() {
     try { rec.protectDrawing = ws.ProtectDrawingObjects; } catch (e3) {}
     try { rec.filterMode = ws.FilterMode; } catch (e4) {}
     try { rec.autoFilter = ws.AutoFilterMode; } catch (e5) {}
+    try {
+      var v = ws.Range('A2').Validation;
+      rec.vType = v.Type;
+      rec.vFormula1 = v.Formula1;
+      rec.vFormula2 = v.Formula2;
+    } catch (e6) { rec.vErr = String(e6); }
+    try {
+      var zz = [];
+      for (var z = 1; z <= 4; z++) zz.push(String(fmt1(ws.Cells(z, 26).Value2)));
+      rec.z = zz;
+    } catch (e7) {}
     out.push(rec);
   }
   return JSON.stringify(out);
