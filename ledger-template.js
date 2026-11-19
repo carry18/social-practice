@@ -321,7 +321,7 @@ function ensureSheets(teams) {
 
   // 6. 调剂池
   ws = ensureSheet('调剂池');
-  writeHeader(ws, ['分配状态', '捞入支队'].concat(BASE_HEAD).concat(['entry_id']));
+  writeHeader(ws, ['分配状态', '捞入支队'].concat(BASE_HEAD).concat(['志愿1','志愿2','志愿3','志愿4','志愿5']).concat(['entry_id']));
   setWidths(ws, [10, 34, 6, 10, 10, 14, 14, 6, 14, 18, 12, 8, 14, 18, 30, 10, 12, 12]);
   addRangeList(ws, 'B2:B1000', '选项!$B$2:$B$' + (n + 1));        // 捞入支队：队名下拉
 
@@ -330,7 +330,7 @@ function ensureSheets(teams) {
     var name = String(t.label).substring(0, 31);
     var ts = ensureSheet(name);
     if (lastRow(ts) < 1 || String(fmt1(ts.Cells(1, 1).Value2)).trim() === '') {
-      writeHeader(ts, ['录取状态'].concat(BASE_HEAD).concat(['entry_id']));
+      writeHeader(ts, ['录取状态'].concat(BASE_HEAD).concat(['志愿1','志愿2','志愿3','志愿4','志愿5']).concat(['entry_id']));
       setWidths(ts, [10, 6, 10, 10, 14, 14, 6, 14, 18, 12, 8, 14, 18, 30, 10, 12, 12]);
     }
     addRangeList(ts, 'A2:A1000', '选项!$A$2:$A$3');                // 录取状态下拉
