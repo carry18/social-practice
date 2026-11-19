@@ -514,14 +514,14 @@ function resetAll(hard, preRows) {
     }
   }
   var rf;
-  try { rf = reflow(true); } catch (eR) { rf = 'reflow失败：' + (eR && eR.message ? eR.message : eR); }
+  try { rf = reflow(true, true); } catch (eR) { rf = 'reflow失败：' + (eR && eR.message ? eR.message : eR); }
   paintAssignCol();
   return 'reset: 清空 ' + cleared + ' 张表 | ' + msg + ' | ' + sync + ' | ' + rf;
 }
 
 /* ---------------- reflow：淘汰 / 捞起归位 ---------------- */
 
-function reflow(force) {
+function reflow(force, alwaysWrite) {
   // 防抖：自动化可能对每次编辑都触发，30 秒内重复调用直接跳过（main 里传 true 强制）
   try {
     var lock = ensureSheet('同步日志');
@@ -644,7 +644,7 @@ function reflow(force) {
       var oid = String(fmt1(o.v[m['entry_id'] - 1])).trim();
       return [statusOf[oid] || ''].concat(pickByHeader(o.v, m, tm, 1));
     });
-    if (sameMatrix(ts, tm['entry_id'], desired)) { rebuilt++; return; }   // 没变化就不动（多余行也会被下面 ClearContents 清掉）
+    if (!alwaysWrite && sameMatrix(ts, tm['entry_id'], desired)) { rebuilt++; return; }   // 普通调用且无变化才跳过
     var tn = lastRow(ts);
     if (tn >= 2) ts.Range(ts.Cells(2, 1), ts.Cells(tn, tm['entry_id'])).ClearContents();
     desired.forEach(function (rowVals, i) {
@@ -828,10 +828,11 @@ function main() {
     }
     // 核对：分表总人数应与总表非淘汰人数一致；不一致就补一次归位
     try {
+      try { reflow(true, true); } catch (eFix) { out.push('强制归位异常:' + (eFix && eFix.message)); }
       var chk = reflowCheck();
       out.push('核对: ' + chk);
       if (chk.indexOf('不一致') >= 0) {
-        out.push('补归位: ' + reflow(true));
+        out.push('补归位: ' + reflow(true, true));
         out.push('复核: ' + reflowCheck());
       }
     } catch (eChk) { out.push('核对失败:' + (eChk && eChk.message)); }
