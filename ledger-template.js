@@ -229,9 +229,12 @@ function addRowColor(ws, addr, formula, rgbArr) {
 function addLocalList(ws, addr, items, startCol) {
   try {
     var col = startCol || 26;   // Z
-    ws.Range(ws.Cells(1, col), ws.Cells(Math.max(items.length, 1), col)).Value2 =
-      items.map(function (x) { return [String(x)]; });
-    var ref = '=$' + colLetter(col) + '$1:$' + colLetter(col) + '$' + items.length;
+    var cL = colLetter(col);
+    ws.Cells(1, col).Value2 = '下拉选项（勿删）';
+    var rowsVals = items.map(function (x) { return [String(x)]; });
+    ws.Range(ws.Cells(2, col), ws.Cells(1 + items.length, col)).Value2 = rowsVals;
+    try { ws.Columns(col).Hidden = true; } catch (eH) {}   // 同表隐藏列，不影响下拉
+    var ref = '=$' + cL + '$2:$' + cL + '$' + (items.length + 1);
     var rng = ws.Range(addr);
     try { rng.Validation.Delete(); } catch (e0) {}
     rng.Validation.Add(3, 1, 1, ref);
