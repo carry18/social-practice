@@ -456,7 +456,7 @@ function headerOk() {
 }
 
 /* 清空重建：保留每人的录取状态与分配，重建后恢复 */
-function resetAll(hard) {
+function resetAll(hard, preRows) {
   var ws = sheet('总表');
   if (ws && headerOk()) { try { reflow(true); } catch (e00) {} }   // 先把分表里的录取状态收回总表
 
@@ -501,7 +501,7 @@ function resetAll(hard) {
     cleared = clearAllData();
   }
   var msg = ensureSheets(CONFIG.teams || []);
-  var sync = syncEntries();
+  var sync = preRows ? applyRows(preRows) : syncEntries();
   var ws2 = sheet('总表');
   if (ws2 && Object.keys(keep).length) {
     var m2 = headerMap(ws2), cId2 = m2['entry_id'], st2 = m2['录取状态'], as2 = m2['分配状态'];
@@ -673,6 +673,7 @@ function respJson(r, path) {
   if (!r) throw new Error('金数据接口无响应：' + path);
   var code = (r.status != null ? r.status : r.statusCode);
   var isOk = (code === 200 || code === 201 || code == null);
+  if (code === 429) throw new Error('金数据限流（免费版 100 次/小时），请稍后再试');
   if (!isOk) throw new Error('金数据接口 ' + path + ' → HTTP ' + code);
   if (typeof r.json === 'function') return r.json();          // AirScript Response
   var txt = (typeof r.text === 'function') ? r.text() : r.text; // 兼容 fetch 风格
@@ -706,7 +707,8 @@ function ledgerRowOf(e) {
   };
 }
 
-function syncEntries() {
+/* 只做网络请求，不写任何单元格 */
+function fetchRows() {
   if (!CONFIG.token || CONFIG.token.indexOf('<') === 0) throw new Error('CONFIG.token 未填写');
   var all = [], next = null, guard = 0;
   do {
@@ -716,7 +718,11 @@ function syncEntries() {
     (d.data || []).forEach(function (e) { all.push(e); });
     next = d.next; guard++;
   } while (next && guard < 20);
-  var rows = all.map(ledgerRowOf);
+  return all.map(ledgerRowOf);
+}
+
+/* 把行写进总表（含删除核对） */
+function applyRows(rows) {
 
   // 核对：金数据里已删除的答卷 → 从总表移除
   var ws = sheet('总表');
@@ -737,6 +743,10 @@ function syncEntries() {
 
   var msg = appendEntries(rows);
   return '同步 ' + rows.length + ' 条：' + msg + (removed ? '；移除已删除 ' + removed : '');
+}
+
+function syncEntries() {
+  return applyRows(fetchRows());
 }
 
 function logRun(text) {
@@ -760,10 +770,34 @@ function logRun(text) {
    说明：main() 里 reflow 是同步执行的，所以不需要单独的"每分钟归位"任务；
          金数据 API 限额 100 次/小时，main() 每分钟跑 = 60 次/小时，够用且安全。 */
 function main() {
+  // 防抖：60 秒内重复执行直接跳过，避免把金数据 100 次/小时额度打爆
+  try {
+    var lb = ensureSheet('同步日志');
+    var lastRun = Number(lb.Cells(1, 5).Value2 || 0);
+    var nowRun = new Date().getTime();
+    if (lastRun && nowRun - lastRun < 60000) return '跳过：60 秒内已同步过（防抖）';
+    lb.Cells(1, 5).Value2 = nowRun;
+  } catch (eD) {}
+
   var out = [];
   try {
-    // 每次 main 都先做一次"清空重建"（FORCE_RESET=true 时直接删表重建，保证列结构 100% 对齐）
-    out.push(resetAll(FORCE_RESET));
+    // ① 先拉数据：失败（如 429 限流）就直接返回，绝不改动表格
+    var rows;
+    try {
+      rows = fetchRows();
+    } catch (eNet) {
+      var em = '失败（**未改动任何表格**）：' + (eNet && eNet.message ? eNet.message : eNet);
+      try { logRun(em); } catch (eL) {}
+      return em;
+    }
+
+    // ② 数据到手，再做重建/写入
+    if (!headerOk()) {
+      out.push(resetAll(true, rows));
+    } else {
+      out.push(resetAll(FORCE_RESET, rows));
+    }
+    out.push('共 ' + (rows || []).length + ' 条答卷');
   } catch (e) {
     out.push('失败：' + (e && e.message ? e.message : e));
   }
@@ -898,6 +932,51 @@ function debug() {
   return JSON.stringify(out);
 }
 
+/* ---------------- status：只读台账状态（不写数据） ---------------- */
+function status() {
+  var out = { sheets: [], teams: [], log: [] };
+  for (var i = 1; i <= Application.Sheets.Count; i++) out.sheets.push(Application.Sheets.Item(i).Name);
+
+  var ws = sheet('总表');
+  if (ws) {
+    var m = headerMap(ws);
+    out.total = { rows: lastRow(ws) - 1, headers: Object.keys(m) };
+    out.assign = {};
+    for (var r = 2; r <= lastRow(ws); r++) {
+      var a = String(fmt1(ws.Cells(r, m['分配状态'] || 1).Value2)).trim();
+      if (a) out.assign[a] = (out.assign[a] || 0) + 1;
+    }
+  }
+
+  var tz = sheet('支队对照');
+  if (tz) {
+    var tzm = headerMap(tz);
+    for (var t = 2; t <= lastRow(tz); t++) {
+      var nm = String(fmt1(tz.Cells(t, tzm['支队名（=分表名）']).Value2)).trim();
+      if (!nm) continue;
+      var ts = sheet(nm);
+      out.teams.push({
+        name: nm,
+        exists: !!ts,
+        rows: ts ? lastRow(ts) - 1 : -1,
+        header: ts ? Object.keys(headerMap(ts)).slice(0, 6) : []
+      });
+    }
+  }
+
+  var ps = sheet('调剂池');
+  if (ps) out.pool = { rows: lastRow(ps) - 1, headers: Object.keys(headerMap(ps)) };
+
+  var lg = sheet('同步日志');
+  if (lg) {
+    var n = lastRow(lg);
+    for (var l = Math.max(2, n - 4); l <= n; l++) {
+      out.log.push([String(fmt1(lg.Cells(l, 1).Value2)), String(fmt1(lg.Cells(l, 2).Value2)).slice(0, 200)]);
+    }
+  }
+  return JSON.stringify(out);
+}
+
 /* ---------------- 入口 ---------------- */
 
 if (action === 'ping') return 'pong';
@@ -912,4 +991,5 @@ if (action === 'main') return main();
 if (action === 'reset') return resetAll();
 if (action === 'verify') return verify();
 if (action === 'debug') return debug();
+if (action === 'status') return status();
 return '未知 action: ' + action;
