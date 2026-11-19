@@ -530,7 +530,7 @@ function headerOk() {
 }
 
 /* 清空重建：保留每人的录取状态与分配，重建后恢复 */
-function resetAll(hard, preRows) {
+function resetAll(hard, preRows, noReflow) {
   var ws = sheet('总表');
   if (ws && headerOk()) { try { reflow(true); } catch (e00) {} }   // 先把分表里的录取状态收回总表
 
@@ -588,10 +588,12 @@ function resetAll(hard, preRows) {
       if (k.assign) { ws2.Cells(r2, as2).Value2 = k.assign; }
     }
   }
-  var rf;
-  try { rf = reflow(true, true); } catch (eR) { rf = 'reflow失败：' + (eR && eR.message ? eR.message : eR); }
-  paintAssignCol();
-  return 'reset: 清空 ' + cleared + ' 张表 | ' + msg + ' | ' + sync + ' | ' + rf;
+  var rf = '';
+  if (!noReflow) {
+    try { rf = ' | ' + reflow(true, true); } catch (eR) { rf = ' | reflow失败：' + (eR && eR.message ? eR.message : eR); }
+  }
+  try { paintAssignCol(); } catch (eP) {}
+  return 'reset: 清空 ' + cleared + ' 张表 | ' + msg + ' | ' + sync + rf;
 }
 
 /* ---------------- reflow：淘汰 / 捞起归位 ---------------- */
@@ -854,6 +856,24 @@ function applyRows(rows) {
 
   var msg = rebuildTotal(rows);
   return '同步 ' + rows.length + ' 条：' + msg + (removed ? '；移除已删除 ' + removed : '');
+}
+
+/* 只同步总表（不归位），用于把长任务拆成两步 */
+function fetchOnly() {
+  var T0 = new Date().getTime();
+  var rows;
+  try { rows = fetchRows(); }
+  catch (eNet) {
+    var em = '失败（未改动表格）：' + (eNet && eNet.message ? eNet.message : eNet);
+    try { logRun(em); } catch (e) {}
+    return em;
+  }
+  var msg;
+  try { msg = resetAll(FORCE_RESET, rows, true); }
+  catch (e2) { msg = '写入异常：' + (e2 && e2.message ? e2.message : e2); }
+  msg += ' | 共 ' + rows.length + ' 条 | 耗时 ' + ((new Date().getTime() - T0) / 1000).toFixed(1) + 's';
+  try { logRun('fetchOnly: ' + msg); } catch (e3) {}
+  return msg;
 }
 
 function syncEntries() {
