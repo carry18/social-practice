@@ -174,16 +174,26 @@ function paintAssignCol() {
   (CONFIG.teams || []).forEach(function (t, i) {
     cmap[t.label] = COLORS[i % COLORS.length];
   });
-  for (var r = 2; r <= lastRow(ws); r++) {
-    var v = String(fmt1(ws.Cells(r, cA).Value2)).trim();
-    var p = cmap[v];
-    if (p) {
-      ws.Cells(r, cA).Interior.Color = RGB(p[0], p[1], p[2]);
-      ws.Cells(r, cA).Font.Color = RGB(TEXT_DARK[0], TEXT_DARK[1], TEXT_DARK[2]);
-    } else {
-      try { ws.Cells(r, cA).Interior.ColorIndex = -4142; } catch (e) {}
+  var n2 = lastRow(ws);
+  if (n2 < 2) return;
+  var colStr = colLetter(cA);
+  try { ws.Range(colStr + '2:' + colStr + n2).Interior.ColorIndex = -4142; } catch (e0) {}
+  // 逐队找到连续区间整块涂色（每队通常只有几段）
+  Object.keys(cmap).forEach(function (lbl) {
+    var p = cmap[lbl], start = 0;
+    for (var r = 2; r <= n2 + 1; r++) {
+      var hit = r <= n2 && String(fmt1(ws.Cells(r, cA).Value2)).trim() === lbl;
+      if (hit && !start) start = r;
+      if (!hit && start) {
+        try {
+          var rng = ws.Range(ws.Cells(start, cA), ws.Cells(r - 1, cA));
+          rng.Interior.Color = RGB(p[0], p[1], p[2]);
+          rng.Font.Color = RGB(TEXT_DARK[0], TEXT_DARK[1], TEXT_DARK[2]);
+        } catch (e1) {}
+        start = 0;
+      }
     }
-  }
+  });
 }
 
 /* 整列条件格式：单元格文本 = text 时整格上色；同一工作表只建一次（防重复规则） */
@@ -396,6 +406,68 @@ function appendEntries(rows) {
 
   paintAssignCol();
   return 'added=' + added + ', updated=' + updated + ', total=' + (lastRow(ws) - 1);
+}
+
+/* 整块重写总表（1 次写入，快）
+   assignMap / statusMap：按 entry_id 保留的人工结果 */
+function rebuildTotal(rows, assignMap, statusMap) {
+  var ws = sheet('总表');
+  if (!ws) throw new Error('找不到「总表」工作表');
+  var m = headerMap(ws);
+  var cId = m['entry_id'];
+  if (!cId) throw new Error('总表缺少 entry_id 列');
+  var width = cId;
+  var volMax = 0;
+  for (var v = 1; m['志愿' + v]; v++) volMax = v;
+
+  // 先取旧的人工结果（避免整块重写时丢掉）
+  var oldAssign = {}, oldStatus = {};
+  var n = lastRow(ws);
+  for (var r = 2; r <= n; r++) {
+    var oid = String(fmt1(ws.Cells(r, cId).Value2)).trim();
+    if (!oid) continue;
+    var a = String(fmt1(ws.Cells(r, m['分配状态']).Value2)).trim();
+    var st = m['录取状态'] ? String(fmt1(ws.Cells(r, m['录取状态']).Value2)).trim() : '';
+    if (a) oldAssign[oid] = a;
+    if (st) oldStatus[oid] = st;
+  }
+
+  var mat = [];
+  rows.forEach(function (row) {
+    if (!row || !row.id) return;
+    var line = [];
+    for (var k = 0; k < width; k++) line.push('');
+    line[m['分配状态'] - 1] = (assignMap && assignMap[row.id]) || oldAssign[row.id] || row.assign || '';
+    var keys = ['sn'].concat(BASE_HEAD.slice(1).map(function (h) { return HEAD2KEY[h]; }));
+    var cols = ['序号'].concat(BASE_HEAD.slice(1));
+    // 序号
+    line[m['序号'] - 1] = row.sn == null ? '' : row.sn;
+    // 其余基础字段
+    BASE_HEAD.slice(1).forEach(function (h, i2) {
+      var col = m[h];
+      if (!col) return;
+      var kk = HEAD2KEY[h];
+      line[col - 1] = row[kk] == null ? '' : row[kk];
+    });
+    // 志愿
+    var vols = row.vols || [];
+    for (var v2 = 1; v2 <= volMax; v2++) {
+      var cv = m['志愿' + v2];
+      if (cv) line[cv - 1] = vols[v2 - 1] == null ? '' : vols[v2 - 1];
+    }
+    // 录取状态
+    if (m['录取状态']) line[m['录取状态'] - 1] = (statusMap && statusMap[row.id]) || oldStatus[row.id] || '';
+    // entry_id
+    line[cId - 1] = row.id;
+    mat.push(line);
+  });
+
+  var tn = lastRow(ws);
+  if (tn >= 2) { try { ws.Range(ws.Cells(2, 1), ws.Cells(tn, width)).ClearContents(); } catch (eC) {} }
+  if (mat.length) {
+    ws.Range(ws.Cells(2, 1), ws.Cells(1 + mat.length, width)).Value2 = mat;
+  }
+  return 'added=' + mat.length + ', total=' + mat.length;
 }
 
 /* 字段名 → 答卷行里的键 */
@@ -650,11 +722,18 @@ function reflow(force, alwaysWrite) {
       return [statusOf[oid] || ''].concat(pickByHeader(o.v, m, tm, 1));
     });
     var tn = lastRow(ts);
-    if (tn >= 2) { try { ts.Range(ts.Cells(2, 1), ts.Cells(tn, Math.max(tm['entry_id'] || 1, 17))).ClearContents(); } catch (eC) {} }
-    desired.forEach(function (rowVals, i) {
-      try { ts.Range(ts.Cells(i + 2, 1), ts.Cells(i + 2, rowVals.length)).Value2 = [rowVals]; }
+    var ncolT = Math.max(tm['entry_id'] || 1, 17);
+    if (tn >= 2) { try { ts.Range(ts.Cells(2, 1), ts.Cells(tn, ncolT)).ClearContents(); } catch (eC) {} }
+    if (desired.length) {
+      var width = ncolT;
+      var mat = desired.map(function (r) {
+        var line = [];
+        for (var k = 0; k < width; k++) line.push(k < r.length ? r[k] : '');
+        return line;
+      });
+      try { ts.Range(ts.Cells(2, 1), ts.Cells(1 + mat.length, width)).Value2 = mat; }
       catch (eW) { writeFail++; lastErr = (eW && eW.message) ? eW.message : String(eW); }
-    });
+    }
     rebuilt++;
   });
 
@@ -763,7 +842,7 @@ function applyRows(rows) {
     });
   }
 
-  var msg = appendEntries(rows);
+  var msg = rebuildTotal(rows);
   return '同步 ' + rows.length + ' 条：' + msg + (removed ? '；移除已删除 ' + removed : '');
 }
 
@@ -849,7 +928,6 @@ function main() {
     }
     // 核对：分表总人数应与总表非淘汰人数一致；不一致就补一次归位
     try {
-      try { reflow(true, true); } catch (eFix) { out.push('强制归位异常:' + (eFix && eFix.message)); }
       var chk = reflowCheck();
       out.push('核对: ' + chk);
       if (chk.indexOf('不一致') >= 0) {
