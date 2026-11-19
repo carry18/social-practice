@@ -260,7 +260,7 @@ function ensureSheets(teams) {
   }
   opt.Cells(n + 2, 3).Value2 = '淘汰';
   try { opt.Columns('A:C').Hidden = false; } catch (e0) {}       // 列不要隐藏（否则看起来是空表）
-  try { opt.Visible = false; } catch (e1) {}                      // 整张表隐藏
+  try { opt.Visible = true; } catch (e1) {}                       // 保持可见：隐藏表的引用在部分版本下拉会失效
 
   // 1. 支队对照
   var ws = ensureSheet('支队对照');
@@ -344,7 +344,7 @@ function ensureSheets(teams) {
       writeHeader(ts, ['录取状态'].concat(BASE_HEAD).concat(['志愿1','志愿2','志愿3','志愿4','志愿5']).concat(['entry_id']));
       setWidths(ts, [10, 6, 10, 10, 14, 14, 6, 14, 18, 12, 8, 14, 18, 30, 10, 12, 12]);
     }
-    addRangeList(ts, 'A2:A1000', '选项!$A$2:$A$3');                // 录取状态下拉
+    addList(ts, 'A2:A1000', ['录取', '淘汰']);                       // 录取状态下拉（内联，最稳）
     try { ts.Range('A2:A1000').FormatConditions.Delete(); } catch (e2) {}
     addColColor(ts, 'A', '淘汰', [237, 237, 237]);
     addColColor(ts, 'A', '录取', [214, 242, 222]);                      // 整列按状态匹配
