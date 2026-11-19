@@ -224,6 +224,21 @@ function addRowColor(ws, addr, formula, rgbArr) {
   return addColColor(ws, col, text, rgbArr);
 }
 
+/* 下拉：把选项写到本表最右侧（Z 列起），再引用本表区域
+   —— 不跨表、不带引号，桌面/手机都不会报"禁止查看的区域"，也不会显示引号 */
+function addLocalList(ws, addr, items, startCol) {
+  try {
+    var col = startCol || 26;   // Z
+    ws.Range(ws.Cells(1, col), ws.Cells(Math.max(items.length, 1), col)).Value2 =
+      items.map(function (x) { return [String(x)]; });
+    var ref = '=$' + colLetter(col) + '$1:$' + colLetter(col) + '$' + items.length;
+    var rng = ws.Range(addr);
+    try { rng.Validation.Delete(); } catch (e0) {}
+    rng.Validation.Add(3, 1, 1, ref);
+    return true;
+  } catch (e) { return false; }
+}
+
 /* 下拉：优先内联（手机端可正常显示），超长才退回区域引用 */
 function addSmartList(ws, addr, items, refFallback) {
   var joined = items.join(',');
@@ -332,7 +347,7 @@ function ensureSheets(teams) {
   setWidths(ws, widths);
   try { ws.Columns(head.length).Hidden = true; } catch (e) {}   // 隐藏 entry_id
   var assignOpts = teams.map(function (t) { return String(t.label); }).concat(['淘汰']);
-  addSmartList(ws, 'A2:A1000', assignOpts, '选项!$C$2:$C$' + (n + 2));   // 分配状态下拉（内联优先）
+  addLocalList(ws, 'A2:A1000', assignOpts, 26);                    // 分配状态下拉（同表 Z 列）
   try { ws.Range('A2:A1000').FormatConditions.Delete(); } catch (e1) {}
   for (var ci = 1; ci <= n && ci <= COLORS.length; ci++) {
     var lbl = String(teams[ci - 1].label).replace(/"/g, '');
@@ -344,7 +359,7 @@ function ensureSheets(teams) {
   writeHeader(ws, ['分配状态', '捞入支队'].concat(BASE_HEAD).concat(['志愿1','志愿2','志愿3','志愿4','志愿5']).concat(['entry_id']));
   setWidths(ws, [10, 34, 6, 10, 10, 14, 14, 6, 14, 18, 12, 8, 14, 18, 30, 10, 12, 12]);
   var teamOpts = teams.map(function (t) { return String(t.label); });
-  addSmartList(ws, 'B2:B1000', teamOpts, '选项!$B$2:$B$' + (n + 1));    // 捞入支队（内联优先）
+  addLocalList(ws, 'B2:B1000', teamOpts, 26);                      // 捞入支队（同表 Z 列）
 
   // 7. 各支队分表
   teams.forEach(function (t) {
@@ -354,7 +369,7 @@ function ensureSheets(teams) {
       writeHeader(ts, ['录取状态'].concat(BASE_HEAD).concat(['志愿1','志愿2','志愿3','志愿4','志愿5']).concat(['entry_id']));
       setWidths(ts, [10, 6, 10, 10, 14, 14, 6, 14, 18, 12, 8, 14, 18, 30, 10, 12, 12]);
     }
-    addList(ts, 'A2:A1000', ['录取', '淘汰']);                       // 录取状态下拉（内联）
+    addLocalList(ts, 'A2:A1000', ['录取', '淘汰'], 26);               // 录取状态下拉（同表 Z 列）
     try { ts.Range('A2:A1000').FormatConditions.Delete(); } catch (e2) {}
     addColColor(ts, 'A', '淘汰', [237, 237, 237]);
     addColColor(ts, 'A', '录取', [214, 242, 222]);                      // 整列按状态匹配
