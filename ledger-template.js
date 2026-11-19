@@ -859,6 +859,7 @@ function logRun(text) {
     ws.Range('A1:B1').Value2 = [['时间', '结果']];
     ws.Rows(1).Font.Bold = true;
   }
+  try { ws.Columns(1).NumberFormat = '@'; } catch (eF) {}   // 时间列按文本存，避免变成 46345.53
   var r = lastDataRow(ws) + 1;   // 追加到真正最后一条之后，不覆盖
   var d = new Date();
   var p = function (n) { return (n < 10 ? '0' : '') + n; };
