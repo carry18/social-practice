@@ -286,10 +286,16 @@ const HEADERS6 = ["序号", "实践地点", "拟主要参访点位", "承办院�
   "保险费每人", "保险费总额", "队伍总额", "报销比例"];
 
 /* 列名 → 列字母（顺序变了也不用改公式） */
-function LC(name) {
-  const i = HEADERS6.indexOf(name);
-  if (i < 0) throw new Error("表头里没有这一列：" + name);
-  return colLetter(i + 1);
+function LC(name, nth = 0) {
+  let idx = -1, seen = 0;
+  for (let i = 0; i < HEADERS6.length; i++) {
+    if (HEADERS6[i] === name) {
+      if (seen === nth) { idx = i; break; }
+      seen++;
+    }
+  }
+  if (idx < 0) throw new Error("表头里没有这一列：" + name);
+  return colLetter(idx + 1);
 }
 
 const R2 = (() => {
@@ -378,8 +384,10 @@ function buildWorkbook(computed) {
   const totalRow = last + 1;
   const NCOLS = HEADERS6.length;
   const col = {};
-  HEADERS6.forEach((h, i) => { if (h) col[h] = colLetter(i + 1); });
+  HEADERS6.forEach((h, i) => { if (h && col[h] === undefined) col[h] = colLetter(i + 1); });  // 同名取第一个
   const at = (name, r) => col[name] + r;
+  const second = { "实践地点": LC("实践地点", 1), "支队人数": LC("支队人数", 1),
+                   "合计": [LC("合计", 0), LC("合计", 1), LC("合计", 2)] };   // M交通 / O住宿 / Q保险
 
   ws["A1"] = { t: "s", v: "院系提供" };
   ws[at("实践地点", 1)] = { t: "s", v: "主要呈现列（公式，勿手改）" };
@@ -400,26 +408,18 @@ function buildWorkbook(computed) {
     if (t.H !== undefined && t.H !== null && t.H !== "")
       ws[at("院系已有支持金额", r)] = { t: "n", v: Number(t.H) || 0 };
 
-    setF(ws, at("实践地点", r), `B${r}`, String(t.B || ""), true);
+    setF(ws, second["实践地点"] + r, `B${r}`, String(t.B || ""), true);   // 呈现列 I = 院系填的 B
     setF(ws, at("参访天数", r), daysFormula(r), t.days || "待填", !t.days);
-    setF(ws, at("支队人数", r), `F${r}`, t.people);
+    setF(ws, second["支队人数"] + r, `F${r}`, t.people);                  // 呈现列 K = 院系填的 F
     setF(ws, at("往返交通费", r),
       `${at("单人交通费", r)}&"/人"&"x"&TEXT(${at("报销比例", r)},"# ?/?")`, t.L, true);
-    setF(ws, at("合计", r), at("交通费总和", r), t.U);
+    setF(ws, second["合计"][0] + r, at("交通费总和", r), t.U);
     setF(ws, at("住宿", r),
       `${at("住宿费标间", r)}/2&"/人·天*"&TRIM(TEXT(${at("报销比例", r)},"# ?/?"))&"*"&${at("住宿天数", r)}&"晚"`, t.N, true);
     setF(ws, at("保险", r),
       `${at("保险费每人", r)}&"/人·周*"&CEILING(${at("参访天数", r)}/7,1)&"周"&"x"&TEXT(${at("报销比例", r)},"# ?/?")`, t.P, true);
-    setF(ws, at("合计", r) === at("合计", r) ? at("合计", r) : at("合计", r), at("交通费总和", r), t.U);
-
-    // 第二个「合计」（住宿合计）
-    const sumColsByName = HEADERS6.reduce((acc, h, i) => {
-      if (h === "合计") acc.push(colLetter(i + 1));
-      return acc;
-    }, []);
-    setF(ws, sumColsByName[0] + r, at("交通费总和", r), t.U);
-    setF(ws, sumColsByName[1] + r, at("住宿费用总和", r), t.Y);
-    setF(ws, sumColsByName[2] + r, at("保险费总额", r), t.AA);
+    setF(ws, second["合计"][1] + r, at("住宿费用总和", r), t.Y);
+    setF(ws, second["合计"][2] + r, at("保险费总额", r), t.AA);
 
     setF(ws, at("总计", r), at("队伍总额", r), t.AB);
 
