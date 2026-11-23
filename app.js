@@ -770,6 +770,23 @@ if (typeof document !== "undefined") {
       if (t.fare.status === "往返总价" || t.fare.status === "多城总价")
         warns.push(`「${t.B}」使用${t.fare.status}（非实时分段价）`);
     });
+    // 记录缺票价的分段，供「补查缺失票价」按钮使用
+    const missKeys = [];
+    computed.forEach(t => {
+      if (t.fare.status === "待查") {
+        String(t.fare.basis).replace(/^待查:\s*/, "").split(/[，,]/).forEach(k => {
+          const kk = k.trim();
+          if (/^[^-]+-[^-]+$/.test(kk) && missKeys.indexOf(kk) < 0) missKeys.push(kk);
+        });
+      }
+    });
+    const fixBtn = $("fare-fix");
+    if (fixBtn) {
+      fixBtn.style.display = missKeys.length ? "inline-block" : "none";
+      fixBtn.dataset.keys = JSON.stringify(missKeys);
+      fixBtn.textContent = "🔁 补查缺失票价（" + missKeys.length + " 段）";
+    }
+
     if (liveRes.failed.length)
       warns.push(`以下分段实时查询失败或无直达车：${liveRes.failed.join("、")}——请手填"单人交通费"，或联系实践部用 --set 人工录入`);
     if (liveRes.fellBack.length)
@@ -1484,6 +1501,41 @@ if (typeof document !== "undefined") {
       renderEditor(); saveLocal(); invalidate();
     });
     $("preview-btn").addEventListener("click", computeAll);
+
+    /* 「补查缺失票价」：对每段调 12306 实时查询，查到就写进票价库并重算 */
+    if ($("fare-fix")) $("fare-fix").addEventListener("click", async function () {
+      const keys = JSON.parse(this.dataset.keys || "[]");
+      if (!keys.length) return;
+      const btn = this;
+      btn.disabled = true;
+      const info = $("fare-info");
+      const ok = [], bad = [];
+      for (let i = 0; i < keys.length; i++) {
+        const [a, b] = keys[i].split("-");
+        info.textContent = `⏳ 补查 ${keys[i]}（${i + 1}/${keys.length}）…`;
+        try {
+          const r = await liveSegment(a, b);
+          FARES.segments[keys[i]] = r.price;
+          FARES.meta = FARES.meta || {};
+          FARES.meta[keys[i]] = { price: r.price, train: r.train, query_date: r.query_date,
+                                  window: r.window, days_queried: r.days_queried, live: true };
+          ok.push(`${keys[i]} ${r.price}元(${r.train})`);
+        } catch (e) {
+          bad.push(`${keys[i]}：${(e && e.message) || e}`);
+        }
+      }
+      btn.disabled = false;
+      if (ok.length) {
+        alert("✅ 补上 " + ok.length + " 段：\n" + ok.join("\n") +
+              (bad.length ? "\n\n仍缺 " + bad.length + " 段：\n" + bad.join("\n") +
+               "\n可在「单人交通费」列手填，或换乘城市" : "") +
+              "\n\n点「确定」后自动重算。");
+        computeAll();
+      } else {
+        alert("❌ 这 " + keys.length + " 段都没查到直达车：\n" + bad.join("\n") +
+              "\n\n处理办法：\n① 在「单人交通费」列直接手填（单位：元/人）\n② 或改成有直达车的相邻城市");
+      }
+    });
     $("generate").addEventListener("click", () => generate("xlsx"));
     $("generate-docx").addEventListener("click", () => generate("docx"));
     if ($("budget-sync")) $("budget-sync").addEventListener("click", syncBudget);
