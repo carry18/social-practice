@@ -157,30 +157,30 @@ def fare_basis(cities, fares):
     return "；".join(parts)
 
 def row_formulas(r):
-    """I-S 呈现列 + U-AC 辅助列公式（T/V/Z 除外）。
+    """I-S 呈现列 + V-AD 辅助列公式（U/W/AA 除外）。
 
     保险统一口径（据「审核报销」skill 就协规则库 career-association.json）：
-    ≤30 元/人/周，AA = Z × 人数 × ceil(天数/7) × 比例；≤7 天即 30 元/人。
+    ≤30 元/人/周，AB = AA × 人数 × ceil(天数/7) × 比例；≤7 天即 30 元/人。
     """
     return {
         "I": f"=B{r}",
         "K": f"=F{r}",
-        "L": f'=T{r}&"/人"&"x"&TEXT(AC{r},"# ?/?")',
-        "M": f"=U{r}",
-        "N": f'=V{r}/2&"/人·天*"&TRIM(TEXT(AC{r},"# ?/?"))&"*"&X{r}&"晚"',
-        "O": f"=Y{r}",
-        "P": f'=Z{r}&"/人·周*"&CEILING(J{r}/7,1)&"周"&"x"&TEXT(AC{r},"# ?/?")',
-        "Q": f"=AA{r}",
-        "R": f"=AB{r}",
+        "L": f'=U{r}&"/人"&"x"&TEXT(AD{r},"# ?/?")',
+        "M": f"=V{r}",
+        "N": f'=W{r}/2&"/人·天*"&TRIM(TEXT(AD{r},"# ?/?"))&"*"&Y{r}&"晚"',
+        "O": f"=Z{r}",
+        "P": f'=AA{r}&"/人·周*"&CEILING(J{r}/7,1)&"周"&"x"&TEXT(AD{r},"# ?/?")',
+        "Q": f"=AB{r}",
+        "R": f"=AC{r}",
         "S": f'=IF(OR(ISNUMBER(SEARCH("就协",D{r})),ISNUMBER(SEARCH("就业协会",D{r}))),'
-             f'"就协全部","院系"&TEXT(1-AC{r},"# ?/?")&"，剩余就协")',
-        "U": f"=K{r}*T{r}*AC{r}",
-        "W": f"=CEILING(K{r}/2,1)",
-        "X": f"=J{r}-1",
-        "Y": f"=V{r}*W{r}*X{r}*AC{r}",
-        "AA": f"=Z{r}*K{r}*CEILING(J{r}/7,1)*AC{r}",
-        "AB": f"=U{r}+Y{r}+AA{r}",
-        "AC": f'=IF(OR(ISNUMBER(SEARCH("就协",D{r})),ISNUMBER(SEARCH("就业协会",D{r}))),1,2/3)',
+             f'"就协全部","院系"&TEXT(1-AD{r},"# ?/?")&"，剩余就协")',
+        "V": f"=K{r}*U{r}*AD{r}",
+        "X": f"=CEILING(K{r}/2,1)",
+        "Y": f"=J{r}-1",
+        "Z": f"=W{r}*X{r}*Y{r}*AD{r}",
+        "AB": f"=AA{r}*K{r}*CEILING(J{r}/7,1)*AD{r}",
+        "AC": f"=V{r}+Z{r}+AB{r}",
+        "AD": f'=IF(OR(ISNUMBER(SEARCH("就协",D{r})),ISNUMBER(SEARCH("就业协会",D{r}))),1,2/3)',
     }
 
 def main():
@@ -205,10 +205,10 @@ def main():
     out = args.output or args.input.replace(".xlsx", "_重建.xlsx")
 
     # AD 列：交通费取价依据（逐段来源留痕）
-    ws[f"AD{args.start_row - 1}"] = "交通费取价依据"
-    ws.column_dimensions["AD"].width = 70
+    ws[f"T{args.start_row - 1}"] = "取价依据"
+    ws.column_dimensions["T"].width = 46
     from openpyxl.styles import Alignment, Font
-    ws[f"AD{args.start_row - 1}"].font = Font(bold=True)
+    ws[f"T{args.start_row - 1}"].font = Font(bold=True)
 
     fare_client = None
     fares_dirty = False
@@ -311,8 +311,8 @@ def main():
         for col, f in row_formulas(r).items():
             ws[f"{col}{r}"] = f
         ws[f"J{r}"] = days if days else "待填"
-        ws[f"T{r}"] = t_val
-        ad = ws[f"AD{r}"]
+        ws[f"U{r}"] = t_val
+        ad = ws[f"T{r}"]
         ad.value = fare_basis(cities, fares)
         ad.alignment = Alignment(wrap_text=True, vertical="center")
         ad.font = Font(size=9, color="595959")

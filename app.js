@@ -281,24 +281,72 @@ async function prefetchLive(valid, onProgress) {
 /* ---------- xlsx 生成（复刻模板布局，公式+缓存值双写） ---------- */
 
 const HEADERS6 = ["序号", "实践地点", "拟主要参访点位", "承办院系", "参访日期", "支队人数", "", "院系已有支持金额",
-  "实践地点", "参访天数", "支队人数", "往返交通费", "合计", "住宿", "合计", "保险", "合计", "总计", "备注",
+  "实践地点", "参访天数", "支队人数", "往返交通费", "合计", "住宿", "合计", "保险", "合计", "总计", "备注", "取价依据",
   "单人交通费", "交通费总和", "住宿费标间", "房间数", "住宿天数", "住宿费用总和",
-  "保险费每人", "保险费总额", "队伍总额", "报销比例", "交通费取价依据"];
+  "保险费每人", "保险费总额", "队伍总额", "报销比例"];
 
-const R2 = { A: "序号", B: "实践地点", C: "拟主要参访点位", D: "承办单位", E: "拟参访日期",
-  F: "支队人数", H: "院系已有支持金额", I: "实践地点", J: "拟参访天数", K: "支队人数",
-  L: "往返交通费", N: "住宿", P: "保险", R: "总计",
-  T: "单人交通费", U: "交通费总和", V: "住宿费标间", W: "房间数", X: "住宿天数",
-  Y: "住宿费用总和", Z: "保险费每人", AA: "保险费总额", AB: "队伍总额", AD: "交通费取价依据" };
+/* 列名 → 列字母（顺序变了也不用改公式） */
+function LC(name) {
+  const i = HEADERS6.indexOf(name);
+  if (i < 0) throw new Error("表头里没有这一列：" + name);
+  return colLetter(i + 1);
+}
 
-const NOTES3 = { A: "填写说明", D: "承办学院（就协组织填“就协”）", E: "（格式：7.19-7.23）",
-  F: "默认12，可按实际调整", T: "北京-实践地各段高铁二等座最高价之和（多城市逐段相加）",
-  AD: "逐段：票价[12306实时·车次·查询日期]；缓存价标注来源",
-  V: "每人每天住宿报销上限150（标间300/2人）", Z: "保险费每人每周不超过30元（≤7天即30元/人）" };
+const R2 = (() => {
+  const m = {};
+  const put = (col, label) => { const L = LC(col); m[L] = label; };
+  put("序号", "序号");
+  put("实践地点", "实践地点");
+  put("拟主要参访点位", "拟主要参访点位");
+  put("承办院系", "承办单位");
+  put("参访日期", "拟参访日期");
+  put("支队人数", "支队人数");
+  put("院系已有支持金额", "院系已有支持金额");
+  put("往返交通费", "往返交通费");
+  put("住宿", "住宿");
+  put("保险", "保险");
+  put("总计", "总计");
+  put("备注", "备注");
+  put("取价依据", "取价依据");
+  put("单人交通费", "单人交通费");
+  put("交通费总和", "交通费总和");
+  put("住宿费标间", "住宿费标间");
+  put("房间数", "房间数");
+  put("住宿天数", "住宿天数");
+  put("住宿费用总和", "住宿费用总和");
+  put("保险费每人", "保险费每人");
+  put("保险费总额", "保险费总额");
+  put("队伍总额", "队伍总额");
+  put("报销比例", "报销比例");
+  return m;
+})();
 
-const COL_W = { A: 6, B: 12, C: 40, D: 16, E: 12, F: 9, G: 3, H: 13, I: 12, J: 9, K: 9,
-  L: 14, M: 10, N: 18, O: 10, P: 12, Q: 10, R: 11, S: 26,
-  T: 11, U: 11, V: 11, W: 11, X: 11, Y: 11, Z: 11, AA: 11, AB: 11, AC: 11, AD: 70 };
+const NOTES3 = (() => {
+  const m = {};
+  const put = (col, label) => { const L = LC(col); m[L] = label; };
+  put("序号", "填写说明");
+  put("承办院系", "承办学院（就协组织填“就协”）");
+  put("参访日期", "（格式：7.19-7.23）");
+  put("支队人数", "默认12，可按实际调整");
+  put("取价依据", "逐段：票价[12306实时·车次·查询日期]；缓存价标注来源");
+  put("单人交通费", "北京-实践地各段高铁二等座最高价之和（多城市逐段相加）");
+  put("住宿费标间", "每人每天住宿报销上限150（标间300/2人）");
+  put("保险费每人", "保险费每人每周不超过30元（≤7天即30元/人）");
+  return m;
+})();
+
+const COL_W = (() => {
+  const m = {};
+  const put = (col, w) => { const L = LC(col); m[L] = w; };
+  put("序号", 6); put("实践地点", 12); put("拟主要参访点位", 40); put("承办院系", 16);
+  put("参访日期", 12); put("支队人数", 9); put("院系已有支持金额", 13);
+  put("往返交通费", 14); put("住宿", 18); put("保险", 12); put("总计", 11); put("备注", 26);
+  put("取价依据", 46); put("单人交通费", 11); put("交通费总和", 11); put("住宿费标间", 11);
+  put("房间数", 11); put("住宿天数", 11); put("住宿费用总和", 11);
+  put("保险费每人", 11); put("保险费总额", 11); put("队伍总额", 11); put("报销比例", 11);
+  return m;
+})();
+
 
 function colLetter(i) { // 1-based
   let s = "";
@@ -321,108 +369,124 @@ function setF(ws, addr, f, v, isStr) {
   ws[addr] = isStr ? { t: "str", f, v } : { t: "n", f, v };
 }
 
+
+/* 各支队预算表（30 列）：列位由 HEADERS6 决定，公式一律按列名取地址，改顺序不用改公式 */
 function buildWorkbook(computed) {
   const ws = {};
   const startRow = 7;
-  // 行1 区域标题
+  const last = startRow + computed.length - 1;
+  const totalRow = last + 1;
+  const NCOLS = HEADERS6.length;
+  const col = {};
+  HEADERS6.forEach((h, i) => { if (h) col[h] = colLetter(i + 1); });
+  const at = (name, r) => col[name] + r;
+
   ws["A1"] = { t: "s", v: "院系提供" };
-  ws["I1"] = { t: "s", v: "主要呈现列（公式，勿手改）" };
-  ws["T1"] = { t: "s", v: "计算辅助列" };
-  ws["AD1"] = { t: "s", v: "取价依据" };
-  // 行2/3 小表头与说明
+  ws[at("实践地点", 1)] = { t: "s", v: "主要呈现列（公式，勿手改）" };
+  ws[at("单人交通费", 1)] = { t: "s", v: "计算辅助列" };
+  ws[at("取价依据", 1)] = { t: "s", v: "取价依据" };
   for (const [c, v] of Object.entries(R2)) ws[`${c}2`] = { t: "s", v };
   for (const [c, v] of Object.entries(NOTES3)) ws[`${c}3`] = { t: "s", v };
-  // 行6 正式表头
   HEADERS6.forEach((h, i) => { if (h) ws[`${colLetter(i + 1)}6`] = { t: "s", v: h }; });
 
   computed.forEach((t, idx) => {
     const r = startRow + idx;
-    ws[`A${r}`] = { t: "n", v: idx + 1 };
-    for (const c of ["B", "C", "D", "E"]) ws[`${c}${r}`] = { t: "s", v: String(t[c] || "") };
-    ws[`F${r}`] = { t: "n", v: t.people };
-    if (t.H !== undefined && t.H !== null && t.H !== "") ws[`H${r}`] = { t: "n", v: Number(t.H) || 0 };
-    setF(ws, `I${r}`, `B${r}`, String(t.B || ""), true);
-    setF(ws, `J${r}`, daysFormula(r), t.days || "待填", !t.days);
-    setF(ws, `K${r}`, `F${r}`, t.people);
-    setF(ws, `L${r}`, `T${r}&"/人"&"x"&TEXT(AC${r},"# ?/?")`, t.L, true);
-    setF(ws, `M${r}`, `U${r}`, t.U);
-    setF(ws, `N${r}`, `V${r}/2&"/人·天*"&TRIM(TEXT(AC${r},"# ?/?"))&"*"&X${r}&"晚"`, t.N, true);
-    setF(ws, `O${r}`, `Y${r}`, t.Y);
-    setF(ws, `P${r}`, `Z${r}&"/人·周*"&CEILING(J${r}/7,1)&"周"&"x"&TEXT(AC${r},"# ?/?")`, t.P, true);
-    setF(ws, `Q${r}`, `AA${r}`, t.AA);
-    setF(ws, `R${r}`, `AB${r}`, t.AB);
-    setF(ws, `S${r}`, `IF(OR(ISNUMBER(SEARCH("就协",D${r})),ISNUMBER(SEARCH("就业协会",D${r}))),"就协全部","院系"&TEXT(1-AC${r},"# ?/?")&"，剩余就协")`, t.S, true);
-    if (t.fare.status === "待查") ws[`T${r}`] = { t: "s", v: "待查" };
-    else if (t.fare.expr) setF(ws, `T${r}`, t.fare.expr, t.T);
-    else ws[`T${r}`] = { t: "n", v: t.T };
-    setF(ws, `U${r}`, `K${r}*T${r}*AC${r}`, t.U);
-    ws[`V${r}`] = { t: "n", v: t.V };
-    setF(ws, `W${r}`, `CEILING(K${r}/2,1)`, t.W);
-    setF(ws, `X${r}`, `IF(ISNUMBER(J${r}),J${r}-1,"")`, t.nights);
-    setF(ws, `Y${r}`, `V${r}/2*K${r}*X${r}*AC${r}`, t.Y);
-    ws[`Z${r}`] = { t: "n", v: t.Z };
-    setF(ws, `AA${r}`, `Z${r}*K${r}*CEILING(J${r}/7,1)*AC${r}`, t.AA);
-    setF(ws, `AB${r}`, `U${r}+Y${r}+AA${r}`, t.AB);
-    setF(ws, `AC${r}`, acFormula(r), t.ac);
-    ws[`AD${r}`] = { t: "s", v: t.fare.basis };
+    ws[at("序号", r)] = { t: "n", v: idx + 1 };
+    ws[at("实践地点", r)] = { t: "s", v: String(t.B || "") };
+    ws[at("拟主要参访点位", r)] = { t: "s", v: String(t.C || "") };
+    ws[at("承办院系", r)] = { t: "s", v: String(t.D || "") };
+    ws[at("参访日期", r)] = { t: "s", v: String(t.E || "") };
+    ws[at("支队人数", r)] = { t: "n", v: t.people };
+    if (t.H !== undefined && t.H !== null && t.H !== "")
+      ws[at("院系已有支持金额", r)] = { t: "n", v: Number(t.H) || 0 };
+
+    setF(ws, at("实践地点", r), `B${r}`, String(t.B || ""), true);
+    setF(ws, at("参访天数", r), daysFormula(r), t.days || "待填", !t.days);
+    setF(ws, at("支队人数", r), `F${r}`, t.people);
+    setF(ws, at("往返交通费", r),
+      `${at("单人交通费", r)}&"/人"&"x"&TEXT(${at("报销比例", r)},"# ?/?")`, t.L, true);
+    setF(ws, at("合计", r), at("交通费总和", r), t.U);
+    setF(ws, at("住宿", r),
+      `${at("住宿费标间", r)}/2&"/人·天*"&TRIM(TEXT(${at("报销比例", r)},"# ?/?"))&"*"&${at("住宿天数", r)}&"晚"`, t.N, true);
+    setF(ws, at("保险", r),
+      `${at("保险费每人", r)}&"/人·周*"&CEILING(${at("参访天数", r)}/7,1)&"周"&"x"&TEXT(${at("报销比例", r)},"# ?/?")`, t.P, true);
+    setF(ws, at("合计", r) === at("合计", r) ? at("合计", r) : at("合计", r), at("交通费总和", r), t.U);
+
+    // 第二个「合计」（住宿合计）
+    const sumColsByName = HEADERS6.reduce((acc, h, i) => {
+      if (h === "合计") acc.push(colLetter(i + 1));
+      return acc;
+    }, []);
+    setF(ws, sumColsByName[0] + r, at("交通费总和", r), t.U);
+    setF(ws, sumColsByName[1] + r, at("住宿费用总和", r), t.Y);
+    setF(ws, sumColsByName[2] + r, at("保险费总额", r), t.AA);
+
+    setF(ws, at("总计", r), at("队伍总额", r), t.AB);
+
+    if (t.fare.status === "待查") ws[at("单人交通费", r)] = { t: "s", v: "待查" };
+    else if (t.fare.expr) setF(ws, at("单人交通费", r), t.fare.expr, t.T);
+    else ws[at("单人交通费", r)] = { t: "n", v: t.T };
+
+    setF(ws, at("交通费总和", r), `${at("支队人数", r)}*${at("单人交通费", r)}*${at("报销比例", r)}`, t.U);
+    ws[at("住宿费标间", r)] = { t: "n", v: t.V };
+    setF(ws, at("房间数", r), `CEILING(${at("支队人数", r)}/2,1)`, t.W);
+    setF(ws, at("住宿天数", r), `IF(ISNUMBER(${at("参访天数", r)}),${at("参访天数", r)}-1,"")`, t.nights);
+    setF(ws, at("住宿费用总和", r),
+      `${at("住宿费标间", r)}/2*${at("支队人数", r)}*${at("住宿天数", r)}*${at("报销比例", r)}`, t.Y);
+    ws[at("保险费每人", r)] = { t: "n", v: t.Z };
+    setF(ws, at("保险费总额", r),
+      `${at("保险费每人", r)}*${at("支队人数", r)}*CEILING(${at("参访天数", r)}/7,1)*${at("报销比例", r)}`, t.AA);
+    setF(ws, at("队伍总额", r),
+      `${at("交通费总和", r)}+${at("住宿费用总和", r)}+${at("保险费总额", r)}`, t.AB);
+    setF(ws, at("报销比例", r), acFormula(r), t.ac);
+    ws[at("备注", r)] = { t: "s", v: t.S || "" };
+    ws[at("取价依据", r)] = { t: "s", v: t.fare.basis || "" };
   });
 
-  // 注：对账区（过会金额/差额）仅内部 rebuild_budget.py 生成，网页版面向院系不附带
-  const last = startRow + computed.length - 1;
-  const totalRow = last + 1;
-
-  // 合计行：30 列模板原来没有，补上后金山/网页都能直接看到期次合计
   ws[`A${totalRow}`] = { t: "s", v: "合计" };
-  const sumDefs = [
-    ["F", "people"], ["H", "H"], ["K", "people"], ["M", "U"], ["O", "Y"],
-    ["Q", "AA"], ["R", "AB"], ["U", "U"], ["W", "W"], ["Y", "Y"],
-    ["AA", "AA"], ["AB", "AB"]
-  ];
-  for (const [col, field] of sumDefs) {
+  [["支队人数", "people"], ["院系已有支持金额", "H"], ["交通费总和", "U"], ["住宿费用总和", "Y"],
+   ["保险费总额", "AA"], ["队伍总额", "AB"], ["房间数", "W"]].forEach(([name, field]) => {
     const sum = computed.reduce((a, t) => a + (Number(t[field]) || 0), 0);
-    setF(ws, `${col}${totalRow}`, `SUM(${col}${startRow}:${col}${last})`, sum);
-  }
+    setF(ws, at(name, totalRow), `SUM(${col[name]}${startRow}:${col[name]}${last})`, sum);
+  });
 
-  // 模板配色（与 预算表模板.xlsx 一致）：院系提供区橙、呈现列蓝、辅助列绿、T列输入高亮黄
-  // 数据区全部自动换行+垂直居中，避免列宽不够文字挤在一起
   const FILL = { orange: "FFFFF2CC", blue: "FFD9E1F2", green: "FFE2EFDA", yellow: "FFFFE699" };
-  const fillOf = (ci, r) => {
-    if (r === 1 || r === 6 || r === totalRow) return ci <= 8 ? FILL.orange : ci <= 19 ? FILL.blue : FILL.green;
-    if (r >= startRow && r <= last) {
-      if (ci <= 8) return FILL.orange;
-      if (ci === 20) return FILL.yellow;
-    }
-    return null;
-  };
+  const idxOf = name => HEADERS6.indexOf(name) + 1;
+  const blueEnd = idxOf("总计");
+  const yellowCol = idxOf("单人交通费");
   for (let r = 1; r <= totalRow; r++) {
-    for (let ci = 1; ci <= 30; ci++) {
-      const rgb = fillOf(ci, r);
-      const isHeader = r === 1 || r === 6, isData = r >= startRow && r <= last;
-      const isTotal = r === totalRow;
-      if (!rgb && !isHeader && !isData && !isTotal) continue;
+    for (let ci = 1; ci <= NCOLS; ci++) {
+      const isHeader = r === 1 || r === 6 || r === totalRow;
+      const isData = r >= startRow && r <= last;
+      let rgb = null;
+      if (isHeader) rgb = ci <= 8 ? FILL.orange : ci <= blueEnd ? FILL.blue : FILL.green;
+      else if (isData) {
+        if (ci <= 8) rgb = FILL.orange;
+        else if (ci === yellowCol) rgb = FILL.yellow;
+      }
+      if (!rgb && !isHeader && !isData) continue;
       const addr = `${colLetter(ci)}${r}`;
       if (!ws[addr]) ws[addr] = { t: "s", v: "" };
-      const s = ws[addr].s || (ws[addr].s = {});
-      if (rgb) s.fill = { patternType: "solid", fgColor: { rgb } };
-      if (isHeader || isTotal) {
-        s.font = { bold: true };
-        s.alignment = { horizontal: "center", vertical: "center", wrapText: true };
+      const st = ws[addr].s || (ws[addr].s = {});
+      if (rgb) st.fill = { patternType: "solid", fgColor: { rgb } };
+      if (isHeader) {
+        st.font = { bold: true };
+        st.alignment = { horizontal: "center", vertical: "center", wrapText: true };
       } else if (isData) {
-        s.alignment = { vertical: "center", wrapText: true };
+        st.alignment = { vertical: "center", wrapText: true };
       }
     }
   }
 
-  ws["!ref"] = `A1:AD${totalRow}`;
+  ws["!ref"] = `A1:${colLetter(NCOLS)}${totalRow}`;
   ws["!merges"] = [
     { s: { r: 0, c: 0 }, e: { r: 0, c: 7 } },
-    { s: { r: 0, c: 8 }, e: { r: 0, c: 18 } },
-    { s: { r: 0, c: 19 }, e: { r: 0, c: 28 } },
+    { s: { r: 0, c: idxOf("实践地点") - 1 }, e: { r: 0, c: blueEnd - 1 } },
+    { s: { r: 0, c: idxOf("单人交通费") - 1 }, e: { r: 0, c: NCOLS - 2 } },
     { s: { r: totalRow - 1, c: 0 }, e: { r: totalRow - 1, c: 4 } },
   ];
-  const cols = [];
-  for (let i = 1; i <= 30; i++) cols.push({ wch: COL_W[colLetter(i)] || 11 });
-  ws["!cols"] = cols;
+  ws["!cols"] = HEADERS6.map((h, i) => ({ wch: COL_W[colLetter(i + 1)] || 11 }));
+
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "各支队预算按实际人数校准");
   return wb;

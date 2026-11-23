@@ -63,7 +63,7 @@ def read_teams(path, sheet, start_row):
         B, D, E, F = (ws[f"{c}{r}"].value for c in "BDEF")
         cv = {c: wsv[f"{c}{r}"].value for c in
               ("K", "L", "M", "N", "O", "P", "Q", "R", "S", "AC")}
-        T = parse_fare(ws[f"T{r}"].value)
+        T = parse_fare(ws[f"U{r}"].value)
         days = parse_days(E)
         people = int(cv["K"]) if isinstance(cv["K"], (int, float)) else int(F or 12)
         ac_cell = ws[f"AC{r}"].value  # AC 一般为公式；手写调整时可能是字面量
