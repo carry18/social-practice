@@ -44,6 +44,24 @@ function parseCities(text, cities) {
   return found.sort((a, b) => a[0] - b[0]).map(x => x[1]);
 }
 
+/* 实践地里"没被词表覆盖"的地名：按分隔符切词，逐段找已知城市，找不到的返回出来
+   例：「沈阳、长春」→ 都命中则 []；「沈阳、四平」→ ["四平"] */
+function unknownPlaces(text, cities) {
+  const raw = String(text || "");
+  const parts = raw.split(/[、,，;；/\s]+/).map(x => x.trim()).filter(Boolean);
+  const out = [];
+  for (const p of parts) {
+    if (/^北京/.test(p)) continue;
+    const hit = cities.some(c => c !== "北京" && p.includes(c));
+    if (!hit) {
+      // 去掉"省/市"等后缀再试一次
+      const q = p.replace(/(省|市|地区|回族|维吾尔|壮族|自治区)/g, "");
+      if (!cities.some(c => c !== "北京" && q.includes(c))) out.push(p);
+    }
+  }
+  return out;
+}
+
 function parseDays(text, today = new Date()) {
   const s = String(text || "");
   let m = s.match(/(\d+)\.(\d+)\s*-\s*(?:(\d+)\.)?(\d+)/) ||
@@ -108,6 +126,7 @@ function ratioOf(d) {
 
 function computeTeam(team, fares, cities) {
   const cs = parseCities(team.B, cities);
+  const unknown = unknownPlaces(team.B, cities);
   const days = parseDays(team.E);
   const people = Number(team.F) || 12;
   const ac = ratioOf(team.D);
@@ -125,7 +144,7 @@ function computeTeam(team, fares, cities) {
   const W = Math.ceil(people / 2);
   const U = people * T * ac, Y = (V / 2) * people * nights * ac, AA = Z * people * weeks * ac;
   return {
-    ...team, cities: cs, days, people, ac, acTxt, V, Z, W, weeks,
+    ...team, cities: cs, unknown, hasWarn: unknown.length > 0, days, people, ac, acTxt, V, Z, W, weeks,
     nights, fare, T, U, Y, AA, AB: U + Y + AA,
     L: `${fmtNum(T)}/人x${acTxt}`,
     N: `${fmtNum(V / 2)}/人·天*${acTxt}*${nights}晚`,
@@ -607,7 +626,7 @@ function teamsFromSheet(ws, fares) {
 
 /* node 测试导出 */
 if (typeof module !== "undefined") {
-  module.exports = { fmtNum, knownCities, parseCities, parseDays, fareFor, ratioOf, computeTeam, buildWorkbook, docxDescs, buildDocx, teamsFromSheet };
+  module.exports = { fmtNum, knownCities, parseCities, unknownPlaces, parseDays, fareFor, ratioOf, computeTeam, buildWorkbook, docxDescs, buildDocx, teamsFromSheet };
 }
 
 /* ---------- 以下为浏览器 UI ---------- */
@@ -708,7 +727,8 @@ if (typeof document !== "undefined") {
       "<th>单人交通费</th><th>预算总额</th><th>票价状态</th></tr>" +
       computed.map(t => `<tr><td>${t.B}</td><td>${t.D}</td><td>${t.people}</td>` +
         `<td>${t.days ?? "?"}</td><td>${t.acTxt}</td><td>${fmtNum(t.T)}</td>` +
-        `<td>${fmtNum(t.AB)}</td><td>${t.fare.status === "待查" ? "⚠ 待查" : "✓ " + t.fare.status}</td></tr>`).join("") +
+        `<td>${fmtNum(t.AB)}</td><td>${t.hasWarn ? "⚠ 未识别：" + t.unknown.join("、")
+          : (t.fare.status === "待查" ? "⚠ 待查" : "✓ " + t.fare.status)}</td></tr>`).join("") +
       `<tr><th colspan="6">合计</th><th>${fmtNum(computed.reduce((a, t) => a + t.AB, 0))}</th><th></th></tr>`;
   }
 
@@ -731,6 +751,7 @@ if (typeof document !== "undefined") {
     const computed = valid.map(t => computeTeam(t, FARES, cities));
     const warns = [];
     computed.forEach(t => {
+      if (t.hasWarn) warns.push(`「${t.B}」有地名不在城市表里：${t.unknown.join("、")}——这几段车票没算，请手填"单人交通费"或在 fares.json 补价`);
       if (t.fare.status === "待查") warns.push(`「${t.B}」${t.fare.basis}——可在网页"单人交通费"列直接手填后重新生成`);
       if (!t.days) warns.push(`「${t.B}」日期「${t.E}」无法识别，天数/住宿/保险未算`);
       if (t.fare.status === "往返总价" || t.fare.status === "多城总价")
@@ -846,6 +867,19 @@ if (typeof document !== "undefined") {
     if (grid && gridFromReadback) patchGridWithTeams(grid, teams);
     const useGrid = !!grid;
     const btn = $("budget-sync"), info = $("budget-sync-info");
+
+    // ⓪ 有未识别地名/待查票价 → 先明确拦一下
+    const badRows = computed.filter(t => t.hasWarn || t.fare.status === "待查");
+    if (badRows.length) {
+      const detail = badRows.map(t => `· 「${t.B}」` +
+        (t.hasWarn ? `未识别地名：${t.unknown.join("、")}` : "") +
+        (t.fare.status === "待查" ? ` 缺票价：${t.fare.basis}` : "")).join("\n");
+      const go = confirm("⚠ 有 " + badRows.length + " 支队的交通费可能算少了：\n\n" + detail +
+        "\n\n这些地名的车票没有计入预算。\n" +
+        "点「确定」= 仍然写入（数字可能偏低）\n" +
+        "点「取消」= 先回去补票价/手填单人交通费");
+      if (!go) return;
+    }
 
     // ① 确认是否为最终版
     const totalAB = computed.reduce((a, t) => a + (Number(t.AB) || 0), 0);

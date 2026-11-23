@@ -63,9 +63,27 @@ def parse_date_range(text, today):
 def fmt_num(x):
     return str(int(x)) if float(x) == int(x) else str(x)
 
-def fare_for(cities, fares):
+def unknown_places(text, cities):
+    """实践地里没被城市表覆盖的地名（静默丢弃会算少钱，必须报出来）。"""
+    import re as _re
+    parts = [x for x in _re.split(r"[、,，;；/\s]+", str(text or "")) if x.strip()]
+    out = []
+    for p in parts:
+        if p.startswith("北京"):
+            continue
+        if not any(c != "北京" and c in p for c in cities):
+            q = _re.sub(r"(省|市|地区|回族|维吾尔|壮族|自治区)", "", p)
+            if not any(c != "北京" and c in q for c in cities):
+                out.append(p)
+    return out
+
+
+def fare_for(cities, fares, place_text=None):
     """返回 (T列写入值, 状态说明)。segments 优先，其次 unsplit 总价 / roundtrip。"""
     segs, rt, unsplit = fares["segments"], fares["roundtrip"], fares["unsplit"]
+    unk = unknown_places(place_text, known_cities(fares)) if place_text else []
+    if unk:
+        return "待查: 未识别地名 " + "、".join(unk), "未识别地名: " + "、".join(unk)
     if not cities:
         return "待查: 未识别实践地", "未识别城市"
     chain = ["北京"] + cities + ["北京"]
@@ -272,7 +290,7 @@ def main():
         cities = parse_cities(B, cities_list)
         if args.online and not args.refresh and cities:
             fetch_missing(cities)
-        t_val, status = fare_for(cities, fares)
+        t_val, status = fare_for(cities, fares, B)
         days = parse_days(E)
 
         for col, f in row_formulas(r).items():
