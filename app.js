@@ -1511,6 +1511,18 @@ function showPreview(computed) {
     });
     $("preview-btn").addEventListener("click", computeAll);
 
+    /* 清除手填票价：从金山读回会把 T 列当"手填值"，导致票价库更新后仍用旧价 */
+    if ($("fare-clear")) $("fare-clear").addEventListener("click", function () {
+      let n = 0;
+      teams.forEach(t => { if (Number(t.T_manual) > 0) n++; t.T_manual = ""; });
+      teams.forEach((t, i) => {
+        const inp = document.querySelector(`#editor input[data-i="${i}"][data-c="T_manual"]`);
+        if (inp) inp.value = "";
+      });
+      saveLocal(); invalidate();
+      alert(n ? `已清除 ${n} 行的手填票价，点「生成预览」按票价库重算` : "没有手填票价，直接点「生成预览」即可");
+    });
+
     /* 「补查缺失票价」：对每段调 12306 实时查询，查到就写进票价库并重算 */
     if ($("fare-fix")) $("fare-fix").addEventListener("click", async function () {
       const keys = JSON.parse(this.dataset.keys || "[]");
