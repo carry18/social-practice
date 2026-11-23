@@ -732,16 +732,23 @@ if (typeof document !== "undefined") {
     w.textContent = "⚠ 注意：\n" + lines.join("\n");
   }
 
-  function showPreview(computed) {
+  /* 把票价依据压成简短逐段明细：北京-沈阳 395 + 沈阳-长春 182 + 长春-北京 559 */
+function fareSegsShort(basis) {
+  return String(basis || "")
+    .split("；")
+    .map(x => x.replace(/^待查[:：]\s*/, "⚠ 缺 ").replace(/元\[[^\]]*\]/g, "").replace(/往返总价\s*/, "").trim())
+    .filter(Boolean)
+    .join(" + ");
+}
+
+function showPreview(computed) {
     const p = $("preview");
     p.style.display = "table";
     p.innerHTML = "<tr><th>实践地点</th><th>承办单位</th><th>人数</th><th>天数</th><th>比例</th>" +
-      "<th>单人交通费</th><th>预算总额</th><th>票价状态</th></tr>" +
+      "<th>单人交通费</th><th>预算总额</th><th>票价构成（逐段）</th></tr>" +
       computed.map(t => `<tr><td>${t.B}</td><td>${t.D}</td><td>${t.people}</td>` +
         `<td>${t.days ?? "?"}</td><td>${t.acTxt}</td><td>${fmtNum(t.T)}</td>` +
-        `<td>${fmtNum(t.AB)}</td><td>${t.fare.status === "待查"
-          ? "⚠ " + String(t.fare.basis).replace(/^待查:\s*/, "")
-          : "✓ " + t.fare.status}</td></tr>`).join("") +
+        `<td>${fmtNum(t.AB)}</td><td class="${t.fare.status === "待查" ? "warn" : ""}">${fareSegsShort(t.fare.basis)}</td></tr>`).join("") +
       `<tr><th colspan="6">合计</th><th>${fmtNum(computed.reduce((a, t) => a + t.AB, 0))}</th><th></th></tr>`;
   }
 
