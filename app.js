@@ -461,8 +461,7 @@ function buildWorkbook(computed) {
       let rgb = null;
       if (isHeader) rgb = ci <= 8 ? FILL.orange : ci <= blueEnd ? FILL.blue : FILL.green;
       else if (isData) {
-        if (ci <= 8) rgb = FILL.orange;
-        else if (ci === yellowCol) rgb = FILL.yellow;
+        if (ci <= 8) rgb = FILL.orange;      // 只保留院系提供区底色，辅助列不再高亮
       }
       if (!rgb && !isHeader && !isData) continue;
       const addr = `${colLetter(ci)}${r}`;
