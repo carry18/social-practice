@@ -80,9 +80,10 @@
   .warn { background: #fff8e6; border: 1px solid #ffe1a8; border-radius: 8px;
           padding: 10px 14px; font-size: 13px; margin-top: 14px; display: none; white-space: pre-line; }
   /* 预览：固定高度 + 双向滚动 + 表头吸顶 */
-  #preview-wrap { max-height: 62vh; overflow: auto; margin-top: 12px;
+  #preview-wrap { max-height: 62vh; overflow: auto; overscroll-behavior: contain; margin-top: 12px;
                   border: 1px solid #e8e0ef; border-radius: 10px; background: #fff; }
-  #preview { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; }
+  /* width:max-content → 内容超宽时自动出现横向滚动条；min-width:100% → 不宽时仍铺满 */
+  #preview { width: max-content; min-width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; }
   #preview th, #preview td { border-bottom: 1px solid #eee; border-right: 1px solid #f2f2f2;
                              padding: 5px 6px; text-align: left; white-space: nowrap; }
   #preview th { background: var(--purple-light); position: sticky; top: 0; z-index: 2; font-weight: 600; }
@@ -477,7 +478,7 @@
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 <script src="overview.js?v=20261120"></script>
 <script src="https://cdn.jsdelivr.net/npm/pizzip@3.1.7/dist/pizzip.min.js"></script>
-<script src="app.js?v=20261228"></script>
+<script src="app.js?v=20261229"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="signup.js?v=20261220"></script>
 <script src="enterprise.js?v=20261114"></script>
