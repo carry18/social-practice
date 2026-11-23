@@ -79,11 +79,24 @@
   .hint { font-size: 12px; color: var(--gray); line-height: 1.7; }
   .warn { background: #fff8e6; border: 1px solid #ffe1a8; border-radius: 8px;
           padding: 10px 14px; font-size: 13px; margin-top: 14px; display: none; white-space: pre-line; }
-  #preview { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 12px; }
-  #preview th, #preview td { border: 1px solid #e0e0e0; padding: 6px 8px; text-align: left; }
+  /* 预览：固定高度 + 双向滚动 + 表头吸顶 */
+  #preview-wrap { max-height: 62vh; overflow: auto; margin-top: 12px;
+                  border: 1px solid #e8e0ef; border-radius: 10px; background: #fff; }
+  #preview { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; }
+  #preview th, #preview td { border-bottom: 1px solid #eee; border-right: 1px solid #f2f2f2;
+                             padding: 5px 6px; text-align: left; white-space: nowrap; }
+  #preview th { background: var(--purple-light); position: sticky; top: 0; z-index: 2; font-weight: 600; }
+  #preview tr:last-child td, #preview tr:last-child th { border-bottom: none; }
+  /* 前面几列收窄 */
+  #preview th:nth-child(1), #preview td:nth-child(1) { max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
+  #preview th:nth-child(2), #preview td:nth-child(2) { max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
+  #preview th:nth-child(3), #preview td:nth-child(3),
+  #preview th:nth-child(4), #preview td:nth-child(4),
+  #preview th:nth-child(5), #preview td:nth-child(5) { width: 46px; text-align: center; }
+  #preview th:nth-child(6), #preview td:nth-child(6),
+  #preview th:nth-child(7), #preview td:nth-child(7) { width: 78px; text-align: right; }
+  #preview td:last-child { font-size: 11.5px; color: #555; white-space: normal; min-width: 260px; max-width: 420px; }
   #preview td.warn { background: #fff4f4; color: #b42318; }
-  #preview td:last-child { font-size: 12px; color: #444; max-width: 320px; }
-  #preview th { background: var(--purple-light); }
   #drop { border: 2px dashed #cbb3dd; border-radius: 10px; padding: 34px; text-align: center;
           color: var(--gray); cursor: pointer; }
   #drop.hover { background: var(--purple-light); }
@@ -282,7 +295,9 @@
     <span class="hint" id="budget-sync-info" style="margin-left:8px"></span>
     <span class="hint">（先点"生成预览"核对下方表格，确认无误后再下载）</span>
     <div class="warn" id="warn"></div>
-    <table id="preview" style="display:none"></table>
+    <div id="preview-wrap" style="display:none">
+      <table id="preview"></table>
+    </div>
   </div>
 
   <div class="card">
@@ -462,7 +477,7 @@
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 <script src="overview.js?v=20261120"></script>
 <script src="https://cdn.jsdelivr.net/npm/pizzip@3.1.7/dist/pizzip.min.js"></script>
-<script src="app.js?v=20261227"></script>
+<script src="app.js?v=20261228"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="signup.js?v=20261220"></script>
 <script src="enterprise.js?v=20261114"></script>
