@@ -13,7 +13,7 @@ const KNOWN_CITIES = ["上海", "西安", "武汉", "合肥", "广州", "深圳"
   "昆明", "贵阳", "南昌", "厦门", "宁波", "温州", "常州", "徐州", "烟台", "威海"];
 
 /* 云函数实时查价（票价库未收录的分段在线查询 12306，失败回落"待查/手填"） */
-const LIVE_API = "https://1386267309-6stucp8l6g.ap-shanghai.tencentscf.com/";
+const LIVE_API = "https://1386267309-cgg8yce0k4.ap-shanghai.tencentscf.com/";
 
 let FARES = null;
 
