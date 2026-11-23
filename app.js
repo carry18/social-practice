@@ -34,15 +34,29 @@ function knownCities(fares) {
 }
 
 function parseCities(text, cities) {
-  const t = String(text || "").replace(/\s+/g, "");
-  const found = [];
-  for (const c of cities) {
-    if (c === "北京") continue;
-    const i = t.indexOf(c);
-    if (i >= 0) found.push([i, c]);
+  /* 按分隔符切词，每个词都是城市候选；白名单只用于清洗前缀（安徽合肥 → 合肥）。
+     这样"城市不在词表里"不会再被静默丢弃——查不到价会明确报"缺票价"。 */
+  const raw = String(text || "").replace(/\s+/g, "");
+  const parts = raw.split(/[、,，;；/·—]+/).map(x => x.trim()).filter(Boolean);
+  const noise = /承担住宿|住宿自理|实践|支队|基地|学院|系$|研究院/;
+  const out = [];
+  for (const p of parts) {
+    if (!p || noise.test(p)) continue;
+    if (/^北京/.test(p)) continue;
+    // 1) 词本身等于某个已知城市
+    let hit = cities.find(c => c !== "北京" && p === c);
+    // 2) 词里包含已知城市（如「安徽合肥」→ 合肥），取最长的那个
+    if (!hit) hit = cities.filter(c => c !== "北京" && p.includes(c)).sort((a, b) => b.length - a.length)[0];
+    // 3) 都不匹配 → 把词当城市候选（去掉省/市等后缀）
+    if (!hit) {
+      const q = p.replace(/(省|市|地区|回族|维吾尔|壮族|自治区)/g, "").replace(/[（(].*?[)）]/g, "");
+      if (/^[一-龥]{2,6}$/.test(q)) hit = q;
+    }
+    if (hit && !out.includes(hit)) out.push(hit);
   }
-  return found.sort((a, b) => a[0] - b[0]).map(x => x[1]);
+  return out;
 }
+
 
 /* 实践地里"没被词表覆盖"的地名：按分隔符切词，逐段找已知城市，找不到的返回出来
    例：「沈阳、长春」→ 都命中则 []；「沈阳、四平」→ ["四平"] */
@@ -144,7 +158,9 @@ function computeTeam(team, fares, cities) {
   const W = Math.ceil(people / 2);
   const U = people * T * ac, Y = (V / 2) * people * nights * ac, AA = Z * people * weeks * ac;
   return {
-    ...team, cities: cs, unknown, hasWarn: unknown.length > 0, days, people, ac, acTxt, V, Z, W, weeks,
+    ...team, cities: cs, unknown,
+    get hasWarn() { return this.fare.status === "待查"; },
+    days, people, ac, acTxt, V, Z, W, weeks,
     nights, fare, T, U, Y, AA, AB: U + Y + AA,
     L: `${fmtNum(T)}/人x${acTxt}`,
     N: `${fmtNum(V / 2)}/人·天*${acTxt}*${nights}晚`,
@@ -156,13 +172,7 @@ function computeTeam(team, fares, cities) {
 /* ---------- 云函数实时查价（浏览器端） ---------- */
 
 function cityTokens(text, cities) {
-  // 先按已知城市表匹配；全未命中时按分隔符切词，作为实时查询的候选城市
-  const hits = parseCities(text, cities);
-  if (hits.length) return hits;
-  return String(text || "").replace(/\s+/g, "")
-    .split(/[、，,\/·—]+/)
-    .map(s => s.trim())
-    .filter(s => /^[一-龥]{2,5}$/.test(s) && !/承担住宿|住宿自理|实践|支队|基地/.test(s));
+  return parseCities(text, cities);   // parseCities 已是"切词 + 白名单清洗"，候选即城市
 }
 
 async function liveSegment(from, to) {
@@ -727,8 +737,9 @@ if (typeof document !== "undefined") {
       "<th>单人交通费</th><th>预算总额</th><th>票价状态</th></tr>" +
       computed.map(t => `<tr><td>${t.B}</td><td>${t.D}</td><td>${t.people}</td>` +
         `<td>${t.days ?? "?"}</td><td>${t.acTxt}</td><td>${fmtNum(t.T)}</td>` +
-        `<td>${fmtNum(t.AB)}</td><td>${t.hasWarn ? "⚠ 未识别：" + t.unknown.join("、")
-          : (t.fare.status === "待查" ? "⚠ 待查" : "✓ " + t.fare.status)}</td></tr>`).join("") +
+        `<td>${fmtNum(t.AB)}</td><td>${t.fare.status === "待查"
+          ? "⚠ " + String(t.fare.basis).replace(/^待查:\s*/, "")
+          : "✓ " + t.fare.status}</td></tr>`).join("") +
       `<tr><th colspan="6">合计</th><th>${fmtNum(computed.reduce((a, t) => a + t.AB, 0))}</th><th></th></tr>`;
   }
 
@@ -751,8 +762,10 @@ if (typeof document !== "undefined") {
     const computed = valid.map(t => computeTeam(t, FARES, cities));
     const warns = [];
     computed.forEach(t => {
-      if (t.hasWarn) warns.push(`「${t.B}」有地名不在城市表里：${t.unknown.join("、")}——这几段车票没算，请手填"单人交通费"或在 fares.json 补价`);
-      if (t.fare.status === "待查") warns.push(`「${t.B}」${t.fare.basis}——可在网页"单人交通费"列直接手填后重新生成`);
+      if (t.fare.status === "待查") {
+        const missing = String(t.fare.basis).replace(/^待查:\s*/, "");
+        warns.push(`「${t.B}」缺票价：${missing}——这几段没算进去，请手填"单人交通费"或补票价库`);
+      }
       if (!t.days) warns.push(`「${t.B}」日期「${t.E}」无法识别，天数/住宿/保险未算`);
       if (t.fare.status === "往返总价" || t.fare.status === "多城总价")
         warns.push(`「${t.B}」使用${t.fare.status}（非实时分段价）`);
@@ -869,11 +882,10 @@ if (typeof document !== "undefined") {
     const btn = $("budget-sync"), info = $("budget-sync-info");
 
     // ⓪ 有未识别地名/待查票价 → 先明确拦一下
-    const badRows = computed.filter(t => t.hasWarn || t.fare.status === "待查");
+    const badRows = computed.filter(t => t.fare.status === "待查");
     if (badRows.length) {
       const detail = badRows.map(t => `· 「${t.B}」` +
-        (t.hasWarn ? `未识别地名：${t.unknown.join("、")}` : "") +
-        (t.fare.status === "待查" ? ` 缺票价：${t.fare.basis}` : "")).join("\n");
+        `缺票价：${String(t.fare.basis).replace(/^待查:\s*/, "")}`).join("\n");
       const go = confirm("⚠ 有 " + badRows.length + " 支队的交通费可能算少了：\n\n" + detail +
         "\n\n这些地名的车票没有计入预算。\n" +
         "点「确定」= 仍然写入（数字可能偏低）\n" +

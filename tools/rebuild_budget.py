@@ -34,10 +34,28 @@ def known_cities(fares):
     return sorted(cities, key=len, reverse=True)  # 长名优先（如"石家庄"先于"石家"误配）
 
 def parse_cities(text, cities=None):
-    """从实践地字符串中按出现顺序提取已知城市。"""
-    t = re.sub(r"\s+", "", str(text or ""))
-    found = sorted(((t.find(c), c) for c in (cities or KNOWN_CITIES) if c != "北京" and c in t))
-    return [c for _, c in found if _ >= 0]
+    """按分隔符切词，每个词都当城市候选；城市表只用于清洗前缀（安徽合肥 → 合肥）。"""
+    import re as _re
+    cities = cities or KNOWN_CITIES
+    raw = _re.sub(r"\s+", "", str(text or ""))
+    parts = [x for x in _re.split(r"[、,，;；/·—]+", raw) if x.strip()]
+    noise = _re.compile(r"承担住宿|住宿自理|实践|支队|基地|学院|研究院")
+    out = []
+    for p in parts:
+        if noise.search(p) or p.startswith("北京"):
+            continue
+        hit = next((c for c in cities if c != "北京" and p == c), None)
+        if not hit:
+            cands = sorted([c for c in cities if c != "北京" and c in p], key=len, reverse=True)
+            hit = cands[0] if cands else None
+        if not hit:
+            q = _re.sub(r"(省|市|地区|回族|维吾尔|壮族|自治区)", "", p)
+            q = _re.sub(r"[（(].*?[)）]", "", q)
+            if _re.fullmatch(r"[一-龥]{2,6}", q):
+                hit = q
+        if hit and hit not in out:
+            out.append(hit)
+    return out
 
 def parse_days(text, year=2026):
     """解析 '7.8-7.10' / '7.28-8.2' / '12.9-12.13' → 天数（含首尾）。"""
@@ -81,9 +99,6 @@ def unknown_places(text, cities):
 def fare_for(cities, fares, place_text=None):
     """返回 (T列写入值, 状态说明)。segments 优先，其次 unsplit 总价 / roundtrip。"""
     segs, rt, unsplit = fares["segments"], fares["roundtrip"], fares["unsplit"]
-    unk = unknown_places(place_text, known_cities(fares)) if place_text else []
-    if unk:
-        return "待查: 未识别地名 " + "、".join(unk), "未识别地名: " + "、".join(unk)
     if not cities:
         return "待查: 未识别实践地", "未识别城市"
     chain = ["北京"] + cities + ["北京"]
