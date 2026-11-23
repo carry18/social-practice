@@ -743,6 +743,8 @@ function fareSegsShort(basis) {
 
 function showPreview(computed) {
     const p = $("preview");
+    const wrap = $("preview-wrap");
+    if (wrap) wrap.style.display = "block";   // 容器初始 display:none，不显示它表格再怎么写也看不见
     p.style.display = "table";
     p.innerHTML = "<tr><th>实践地点</th><th>承办单位</th><th>人数</th><th>天数</th><th>比例</th>" +
       "<th>单人交通费</th><th>预算总额</th><th>票价构成（逐段）</th></tr>" +
