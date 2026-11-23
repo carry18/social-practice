@@ -249,6 +249,7 @@ async function prefetchLive(valid, onProgress) {
     }
   }
   const failed = [], fellBack = [];
+  let okCount = 0;
   let done = 0;
   const runOne = async ([a, b, key, hasSnap]) => {
     onProgress && onProgress(`⏳ 实时查询票价（${++done}/${tasks.length}）${key}…`);
@@ -258,6 +259,7 @@ async function prefetchLive(valid, onProgress) {
                       window: r.window, days_queried: r.days_queried, at: Date.now() };
       segs[key] = r.price;
       meta[key] = { ...entry, live: true };
+      okCount++;
       cache.items[key] = entry;
       writeLiveCache(cache);
     } catch (e) {
@@ -273,7 +275,7 @@ async function prefetchLive(valid, onProgress) {
     while (queue.length) await runOne(queue.shift());
   });
   await Promise.all(workers);
-  return { failed, fellBack };
+  return { failed, fellBack, attempted: tasks.length, ok: okCount };
 }
 
 /* ---------- xlsx 生成（复刻模板布局，公式+缓存值双写） ---------- */
